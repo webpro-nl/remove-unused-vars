@@ -1,0 +1,20 @@
+{
+  "name": "remove-unused-vars",
+  "version": "0.0.0",
+  "description": "Remove unused variables using TypeScript",
+  "type": "module",
+  "main": "./index.js",
+  "bin": "./index.js",
+  "license": "ISC",
+  "author": {
+    "email": "lars@webpro.nl",
+    "name": "Lars Kappert",
+    "url": "https://webpro.nl"
+  },
+  "files": [
+    "index.js"
+  ],
+  "dependencies": {
+    "typescript": "^5.0.0"
+  }
+}
