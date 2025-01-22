@@ -11,36 +11,48 @@ good reason!). However, removing everything the linter finds and then run QA and
 save a lot of time. Needless to say, Git's your friend here.
 
 Don't use e.g. `eslint --fix` or `biome lint --write`, otherwise the positions to remove things might not match up. Use
-your linter first to have it remove whatever it can, then proceed with the command(s) below.
+the linter first to have it remove whatever it can, then proceed with the command(s) below.
 
 > [!TIP]
 >
 > Use this with [Knip](https://knip.dev) for a cruel code crusher experience.
 
+## Install
+
+```sh
+npm install -D remove-unused-vars
+```
+
 ## Pipe JSON
+
+Pipe the JSON-formatted output of the linter to `remove-unused-vars`
+
+Modify the commands below to the project to use local linter configuration.
+
+Remove `-y -p remove-unused-vars` if this package already installed in the project.
 
 ### ESLint
 
 ```sh
-npx -p remove-unused-vars eslint --rule 'no-unused-vars: error' --quiet -f json | remove-unused-vars
+npx -y -p remove-unused-vars eslint --rule 'no-unused-vars: error' --quiet -f json | remove-unused-vars
 ```
 
 ### typescript-eslint
 
 ```sh
-npx -p remove-unused-vars eslint --rule 'no-unused-vars: off' --rule '@typescript-eslint/no-unused-vars: error' --quiet -f json | remove-unused-vars
+npx -y -p remove-unused-vars eslint --rule 'no-unused-vars: off' --rule '@typescript-eslint/no-unused-vars: error' --quiet -f json | remove-unused-vars
 ```
 
 ### Biome
 
 ```sh
-npx -p remove-unused-vars @biomejs/biome lint --only correctness/noUnusedVariables --reporter json | remove-unused-vars
+npx -y -p remove-unused-vars biome lint --only correctness/noUnusedVariables --reporter json | remove-unused-vars
 ```
 
 ### oxlint
 
 ```sh
-npx oxlint@latest -A all -D '@typescript-eslint/no-unused-vars' -f json | remove-unused-vars
+npx -y -p remove-unused-vars oxlint -A all -D '@typescript-eslint/no-unused-vars' -f json | remove-unused-vars
 ```
 
 ## From JSON file
@@ -48,6 +60,6 @@ npx oxlint@latest -A all -D '@typescript-eslint/no-unused-vars' -f json | remove
 Alternatively, provide a JSON file as the first argument to `remove-unused-vars`, for example:
 
 ```sh
-npx oxlint@latest -A all -D '@typescript-eslint/no-unused-vars' -f json > unused-vars.json
+npx -p remove-unused-vars oxlint -A all -D '@typescript-eslint/no-unused-vars' -f json > unused-vars.json
 npx remove-unused-vars unused-vars.json
 ```
