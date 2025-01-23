@@ -44,15 +44,11 @@ function transformBiome(input) {
   const groupedByFile = input.diagnostics
     .filter(diagnostic => diagnostic.category === 'lint/correctness/noUnusedVariables')
     .reduce((output, diagnostic) => {
-      const filename = diagnostic.location.path.file;
-      if (!output[filename]) {
-        output[filename] = {
-          filePath: filename,
-          positions: [],
-          source: diagnostic.location.sourceCode,
-        };
+      const filePath = diagnostic.location.path.file;
+      if (!output[filePath]) {
+        output[filePath] = { filePath, positions: [], source: diagnostic.location.sourceCode };
       }
-      output[filename].positions.push(diagnostic.location.span[0]);
+      output[filePath].positions.push(diagnostic.location.span[0]);
       return output;
     }, {});
   return Object.values(groupedByFile);
@@ -62,14 +58,11 @@ function transformOxlint(input) {
   const groupedByFile = input
     .filter(result => result.code === 'eslint(no-unused-vars)')
     .reduce((output, result) => {
-      if (!output[result.filename]) {
-        output[result.filename] = {
-          filePath: result.filename,
-          positions: [],
-          source: result.source,
-        };
+      const filePath = result.filename;
+      if (!output[filePath]) {
+        output[filePath] = { filePath, positions: [], source: result.source };
       }
-      output[result.filename].positions.push(result.labels[0].span.offset);
+      output[filePath].positions.push(result.labels[0].span.offset);
       return output;
     }, {});
   return Object.values(groupedByFile);
