@@ -6,9 +6,11 @@ Remove more unused variables. Highly experimental.
 >
 > There's a reason linters don't fix the unused variables, even with a flag like `--unsafe` or `--fix-dangerously`.
 
-Modern linters can fix a lot of issues automatically, but don't always remove all unused variables and types (again, for
-good reason!). However, removing everything the linter finds and then run QA and review what needs to be reverted can
-save a lot of time. Needless to say, Git's your friend here.
+Modern linters can fix a lot of issues automatically, but don't always remove all unused variables and types. Even when
+using `--unsafe` or `--fix-dangerously`.
+
+Use `remove-unused-vars` to remove everything the linter finds. Then run QA and review if there's anything that might
+need reverting. Needless to say, Git's your friend here!
 
 Don't use e.g. `eslint --fix` or `biome lint --write` when piping to `remove-unused-vars`, otherwise the positions to
 remove things might not match up. Use the linter first to have it remove whatever it can, then proceed with the
