@@ -74,7 +74,11 @@ function transformEslint(input) {
     .filter(result => result.messages.some(predicate))
     .map(result => ({
       filePath: result.filePath,
-      positions: result.messages.filter(predicate).map(msg => [msg.line - 1, msg.column]),
+      positions: result.messages.filter(predicate).map(msg => {
+        const range = msg.suggestions[0]?.fix?.range;
+        if (range) return range[0] + (range[1] - range[0] > 1 ? 1 : 0); // i can't
+        return [msg.line - 1, msg.column];
+      }),
       source: result.source,
     }));
 }
