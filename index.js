@@ -128,6 +128,14 @@ function removeUnusedVariables(results) {
           };
         }
 
+        if (ts.isBindingElement(token.parent)) {
+          const parameter = token.parent;
+          let start = parameter.getFullStart();
+          let end = parameter.getEnd();
+          if (parameter !== parameter.parent.elements.at(-1)) end = source.indexOf(',', end) + 1;
+          return { start, end };
+        }
+
         if (ts.isParameter(token.parent)) {
           const parameter = token.parent;
           const parent = parameter.parent;
@@ -135,17 +143,13 @@ function removeUnusedVariables(results) {
             const hasParens =
               source.slice(parent.parameters[0].getFullStart(), parent.parameters[0].getFullStart() + 1) === '(';
             if (!hasParens) {
-              return { start: parameter.getFullStart(), end: parameter.getEnd(), replacement: '()' };
+              return { start: parameter.getFullStart(), end: parameter.getEnd(), replacement: ' ()' };
             }
           }
 
-          if (parent.parameters.indexOf(parameter) !== parent.parameters.length - 1) return null;
-
           let start = parameter.getFullStart();
           let end = parameter.getEnd();
-
-          if (parameter !== parent.parameters[0]) start = source.lastIndexOf(',', start);
-
+          if (parameter !== parameter.parent.parameters.at(-1)) end = source.indexOf(',', end) + 1;
           return { start, end };
         }
 
@@ -195,7 +199,9 @@ function removeUnusedVariables(results) {
         if (ts.isImportDeclaration(token.parent)) return null;
 
         const node = findParentDeclaration(token);
+
         if (!node) return null;
+
         return { start: node.getFullStart(), end: node.getEnd() };
       })
       .filter(Boolean);
