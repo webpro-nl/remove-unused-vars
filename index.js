@@ -140,7 +140,7 @@ function removeUnusedVariables(results) {
 
         if (ts.isBindingElement(token.parent)) {
           const parameter = token.parent;
-          let start = parameter.getFullStart();
+          const start = parameter.getFullStart();
           let end = parameter.getEnd();
           if (parameter !== parameter.parent.elements.at(-1)) end = source.indexOf(',', end) + 1;
           return { start, end };
@@ -157,7 +157,7 @@ function removeUnusedVariables(results) {
             }
           }
 
-          let start = parameter.getFullStart();
+          const start = parameter.getFullStart();
           let end = parameter.getEnd();
           if (parameter !== parameter.parent.parameters.at(-1)) end = source.indexOf(',', end) + 1;
           return { start, end };
@@ -168,7 +168,9 @@ function removeUnusedVariables(results) {
           const nextToken = ts.findNextToken(importDecl, sourceFile);
           const end = nextToken ? nextToken.getFullStart() : source.length;
           return { start: importDecl.getFullStart(), end };
-        } else if (ts.isImportSpecifier(token.parent)) {
+        }
+
+        if (ts.isImportSpecifier(token.parent)) {
           const importSpecifier = token.parent;
           const importClause = importSpecifier.parent.parent;
           const importDeclaration = importClause.parent;
@@ -180,7 +182,7 @@ function removeUnusedVariables(results) {
               const pos = getPos(sourceFile, p);
               const token = ts.getTokenAtPosition(sourceFile, pos);
               return token.parent === element;
-            })
+            }),
           );
           if (allElementsRemoved) {
             if (processedImports.has(importDeclaration.pos)) return null;
@@ -198,7 +200,9 @@ function removeUnusedVariables(results) {
             start = source.lastIndexOf(',', start);
           }
           return { start, end };
-        } else if (ts.isNamespaceImport(token.parent)) {
+        }
+
+        if (ts.isNamespaceImport(token.parent)) {
           const namespaceImport = token.parent;
           const importDecl = namespaceImport.parent.parent;
           const nextToken = ts.findNextToken(importDecl, sourceFile);
