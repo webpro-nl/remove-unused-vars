@@ -75,9 +75,15 @@ function transformEslint(input) {
     .map(result => ({
       filePath: result.filePath,
       positions: result.messages.filter(predicate).map(msg => {
-        const range = msg.suggestions[0]?.fix?.range;
-        if (range) return range[0] + (range[1] - range[0] > 1 ? 1 : 0); // i can't
-        return [msg.line - 1, msg.column];
+        if (msg.ruleId === 'no-unused-vars') {
+          const range = msg.suggestions[0]?.fix?.range;
+          if (range) return range[0] + (range[1] - range[0] > 1 ? 1 : 0); // i can't
+        } else {
+          // It's probably more precise to use the range from the suggestion, but the rule does not provide it yet
+          // When https://github.com/typescript-eslint/typescript-eslint/issues/10497 is fixed,
+          // then we can use the range from the suggestion.
+          return [msg.line - 1, msg.column];
+        }
       }),
       source: result.source,
     }));
@@ -174,7 +180,7 @@ function removeUnusedVariables(results) {
               const pos = getPos(sourceFile, p);
               const token = ts.getTokenAtPosition(sourceFile, pos);
               return token.parent === element;
-            }),
+            })
           );
           if (allElementsRemoved) {
             if (processedImports.has(importDeclaration.pos)) return null;
