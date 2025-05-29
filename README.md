@@ -53,7 +53,7 @@ biome lint --only correctness/noUnusedVariables --reporter json | remove-unused-
 ### oxlint
 
 ```sh
-oxlint -A all -D '@typescript-eslint/no-unused-vars' -f json | remove-unused-vars
+oxlint -A all -D 'no-unused-vars' -D '@typescript-eslint/no-unused-vars' -f json | remove-unused-vars
 ```
 
 ## From JSON file
@@ -69,6 +69,6 @@ remove-unused-vars unused-vars.json
 
 Use something like this without installing `remove-unused-vars`:
 
-```
-npm run --silent lint -- --quiet --format json | npx -y remove-unused-vars
+```sh
+eslint -- --quiet --format json | npx -y remove-unused-vars
 ```
