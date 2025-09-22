@@ -191,7 +191,7 @@ function removeUnusedVariables(results) {
               const pos = getPos(sourceFile, p);
               const token = ts.getTokenAtPosition(sourceFile, pos);
               return token.parent === element;
-            })
+            }),
           );
           if (allElementsRemoved) {
             if (processedImports.has(importDeclaration.pos)) return null;
