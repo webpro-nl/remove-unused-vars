@@ -72,21 +72,30 @@ function transformEslint(input) {
   const predicate = msg => msg.ruleId === 'no-unused-vars' || msg.ruleId === '@typescript-eslint/no-unused-vars';
   return input
     .filter(result => result.messages.some(predicate))
-    .map(result => ({
-      filePath: result.filePath,
-      positions: result.messages.filter(predicate).map(msg => {
-        if (msg.ruleId === 'no-unused-vars') {
-          const range = msg.suggestions[0]?.fix?.range;
-          if (range) return range[0] + (range[1] - range[0] > 1 ? 1 : 0); // i can't
-        } else {
-          // It's probably more precise to use the range from the suggestion, but the rule does not provide it yet
-          // When https://github.com/typescript-eslint/typescript-eslint/issues/10497 is fixed,
-          // then we can use the range from the suggestion.
-          return [msg.line - 1, msg.column];
-        }
-      }),
-      source: result.source,
-    }));
+    .map(result => {
+      const source = result.source ?? readFileSync(result.filePath, 'utf-8');
+      return {
+        filePath: result.filePath,
+        positions: result.messages.filter(predicate).map(msg => {
+          if (msg.ruleId === 'no-unused-vars') {
+            const range = msg.suggestions[0]?.fix?.range;
+            const varName = msg.suggestions[0]?.data?.varName;
+            const text = source.slice(range[0], range[1]);
+            if (range && varName) {
+              const offset = text.lastIndexOf(varName);
+              return range[0] + offset;
+            }
+            if (range) return range[0] + (range[1] - range[0] > 1 ? 1 : 0); // i can't
+          } else {
+            // It's probably more precise to use the range from the suggestion, but the rule does not provide it yet
+            // When https://github.com/typescript-eslint/typescript-eslint/issues/10497 is fixed,
+            // then we can use the range from the suggestion.
+            return [msg.line - 1, msg.column - 1];
+          }
+        }),
+        source,
+      };
+    });
 }
 
 function findParentDeclaration(node) {
@@ -151,7 +160,7 @@ function removeUnusedVariables(results) {
           const parent = parameter.parent;
           if (ts.isArrowFunction(parent) && parent.parameters.length === 1) {
             const hasParens =
-              source.slice(parent.parameters[0].getFullStart(), parent.parameters[0].getFullStart() + 1) === '(';
+              source.slice(parent.parameters[0].getFullStart() - 1, parent.parameters[0].getFullStart()) === '(';
             if (!hasParens) {
               return { start: parameter.getFullStart(), end: parameter.getEnd(), replacement: ' ()' };
             }
@@ -182,7 +191,7 @@ function removeUnusedVariables(results) {
               const pos = getPos(sourceFile, p);
               const token = ts.getTokenAtPosition(sourceFile, pos);
               return token.parent === element;
-            }),
+            })
           );
           if (allElementsRemoved) {
             if (processedImports.has(importDeclaration.pos)) return null;
@@ -222,8 +231,17 @@ function removeUnusedVariables(results) {
 
     if (positions.length > 0) {
       let output = source;
-      for (const { start, end, replacement } of positions.sort((a, b) => b.start - a.start)) {
-        output = output.slice(0, start) + (replacement ?? '') + output.slice(end);
+      positions.sort((a, b) => {
+        return b.end - a.end;
+      });
+
+      let lastStart = Infinity;
+      for (const { start, end, replacement } of positions) {
+        // skip covered positions
+        if (end <= lastStart) {
+          output = output.slice(0, start) + (replacement ?? '') + output.slice(end);
+          lastStart = start;
+        }
       }
 
       writeFileSync(file.filePath, output);
