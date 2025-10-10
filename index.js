@@ -105,7 +105,8 @@ function findParentDeclaration(node) {
     !ts.isVariableStatement(node) &&
     !ts.isClassDeclaration(node) &&
     !ts.isInterfaceDeclaration(node) &&
-    !ts.isTypeAliasDeclaration(node)
+    !ts.isTypeAliasDeclaration(node) &&
+    !ts.isEnumDeclaration(node)
   ) {
     node = node.parent;
   }
