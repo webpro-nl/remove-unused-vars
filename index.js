@@ -42,7 +42,11 @@ function transform(json, format) {
 
 function transformBiome(input) {
   const groupedByFile = input.diagnostics
-    .filter(diagnostic => diagnostic.category === 'lint/correctness/noUnusedVariables')
+    .filter(
+      diagnostic =>
+        diagnostic.category === 'lint/correctness/noUnusedVariables' ||
+        diagnostic.category === 'lint/correctness/noUnusedImports',
+    )
     .reduce((output, diagnostic) => {
       const filePath = diagnostic.location.path.file;
       if (!output[filePath]) {
