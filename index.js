@@ -24,8 +24,10 @@ const unifiedResults = transform(jsonInput, format);
 removeUnusedVariables(unifiedResults);
 
 function detect(json) {
-  if (Array.isArray(json) && json[0]?.code?.startsWith('eslint') && json[0]?.labels) return Format.OXLINT;
-  if (json.diagnostics && Array.isArray(json.diagnostics)) return Format.BIOME;
+  if (json.diagnostics && Array.isArray(json.diagnostics)) {
+    if (json.diagnostics[0]?.category) return Format.BIOME;
+    if (json.diagnostics[0]?.code?.startsWith('eslint')) return Format.OXLINT;
+  }
   return Format.ESLINT;
 }
 
@@ -59,12 +61,12 @@ function transformBiome(input) {
 }
 
 function transformOxlint(input) {
-  const groupedByFile = input
+  const groupedByFile = input.diagnostics
     .filter(result => result.code === 'eslint(no-unused-vars)')
     .reduce((output, result) => {
       const filePath = result.filename;
       if (!output[filePath]) {
-        output[filePath] = { filePath, positions: [], source: result.source };
+        output[filePath] = { filePath, positions: [] };
       }
       output[filePath].positions.push(result.labels[0].span.offset);
       return output;
