@@ -63,3 +63,8 @@ test('basic combine', () => {
   execLint(path.join(fixturesDir, `${dir}/input.js`), path.join(fixturesDir, `${dir}/output.js`), runEsLint);
   execLint(path.join(fixturesDir, `${dir}/input.js`), path.join(fixturesDir, `${dir}/output.js`), runTsEslint);
 });
+
+test('basic enum', () => {
+  const dir = '/enum';
+  execLint(path.join(fixturesDir, `${dir}/input.ts`), path.join(fixturesDir, `${dir}/output.ts`), runTsEslint);
+});
