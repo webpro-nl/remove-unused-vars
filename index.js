@@ -251,6 +251,12 @@ function removeUnusedVariables(results) {
         }
       }
 
+      // Clean up double commas and trailing commas in import/export lists
+      // Remove double commas
+      output = output.replace(/,{2,}/g, ',');
+      // Remove trailing comma before closing braces in import/export lists
+      output = output.replace(/,([ \t\r\n]*)}/g, '$1}');
+
       writeFileSync(file.filePath, output);
     }
   }
