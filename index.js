@@ -84,6 +84,8 @@ function transformEslint(input) {
         filePath: result.filePath,
         positions: result.messages.filter(predicate).map(msg => {
           if (msg.ruleId === 'no-unused-vars') {
+            // catch clause no suggestions
+            if (!msg.suggestions) return [msg.line - 1, msg.column - 1];
             const range = msg.suggestions[0]?.fix?.range;
             const varName = msg.suggestions[0]?.data?.varName;
             const text = source.slice(range[0], range[1]);
@@ -146,12 +148,16 @@ function removeUnusedVariables(results) {
       .map(p => {
         const pos = getPos(sourceFile, p);
         const token = ts.getTokenAtPosition(sourceFile, pos);
-
         if (ts.isCatchClause(token.parent.parent)) {
-          return {
-            start: token.parent.getFullStart(),
-            end: token.parent.getEnd(),
-          };
+          const preToken = ts.findPrecedingToken(token.getFullStart(), sourceFile);
+          const nextToken = ts.findNextToken(token, sourceFile);
+          if (preToken && nextToken && preToken.getText() === '(' && nextToken.getText() === ')') {
+            return {
+              start: preToken.getFullStart(),
+              end: nextToken.getEnd(),
+            };
+          }
+          return null;
         }
 
         if (ts.isBindingElement(token.parent)) {

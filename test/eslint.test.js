@@ -68,3 +68,9 @@ test('basic enum', () => {
   const dir = '/enum';
   execLint(path.join(fixturesDir, `${dir}/input.ts`), path.join(fixturesDir, `${dir}/output.ts`), runTsEslint);
 });
+
+test('basic try-catch', () => {
+  const dir = '/try-catch';
+  execLint(path.join(fixturesDir, `${dir}/input.js`), path.join(fixturesDir, `${dir}/output.js`), runEsLint);
+  execLint(path.join(fixturesDir, `${dir}/input.js`), path.join(fixturesDir, `${dir}/output.js`), runTsEslint);
+});
