@@ -1,4 +1,4 @@
-import { bool, } from '../../util';
+import { bool } from '../../util';
 import Hello from '../../hello';
 
 bool();

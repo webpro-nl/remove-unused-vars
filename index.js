@@ -212,7 +212,7 @@ function removeUnusedVariables(results) {
           if (importSpecifier === elements[0]) {
             const nextElement = elements[1];
             end = nextElement.getFullStart();
-          } else if (importSpecifier !== elements[elements.length - 1]) {
+          } else {
             start = source.lastIndexOf(',', start);
           }
           return { start, end };
