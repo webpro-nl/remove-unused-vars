@@ -1,0 +1,16 @@
+{
+  "$schema": "https://unpkg.com/release-it@19/schema/release-it.json",
+  "hooks": {
+    "before:init": ["npm t"]
+  },
+  "github": {
+    "release": true,
+    "releaseNotes": {
+      "commit": "* ${commit.subject} (${sha}){ - thanks @${author.login}!}",
+      "excludeMatches": ["webpro"]
+    },
+    "comments": {
+      "submit": true
+    }
+  }
+}
