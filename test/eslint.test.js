@@ -74,3 +74,9 @@ test('basic try-catch', () => {
   execLint(path.join(fixturesDir, `${dir}/input.js`), path.join(fixturesDir, `${dir}/output.js`), runEsLint);
   execLint(path.join(fixturesDir, `${dir}/input.js`), path.join(fixturesDir, `${dir}/output.js`), runTsEslint);
 });
+
+test('basic destructure', () => {
+  const dir = '/destructure';
+  execLint(path.join(fixturesDir, `${dir}/input.js`), path.join(fixturesDir, `${dir}/output.js`), runEsLint);
+  execLint(path.join(fixturesDir, `${dir}/input.js`), path.join(fixturesDir, `${dir}/output.js`), runTsEslint);
+});
