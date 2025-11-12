@@ -143,6 +143,7 @@ function removeUnusedVariables(results) {
     const sourceFile = ts.createSourceFile(file.filePath, source, ts.ScriptTarget.Latest, true);
 
     const processedImports = new Set();
+    const processedBindings = new Set();
 
     const positions = file.positions
       .map(p => {
@@ -161,10 +162,42 @@ function removeUnusedVariables(results) {
         }
 
         if (ts.isBindingElement(token.parent)) {
-          const parameter = token.parent;
-          const start = parameter.getFullStart();
-          let end = parameter.getEnd();
-          if (parameter !== parameter.parent.elements.at(-1)) end = source.indexOf(',', end) + 1;
+          const bindingElement = token.parent;
+          const bindingPattern = bindingElement.parent;
+
+          // Check if this is a destructuring pattern in a variable declaration
+          if (ts.isObjectBindingPattern(bindingPattern) || ts.isArrayBindingPattern(bindingPattern)) {
+            const variableDeclaration = bindingPattern.parent;
+
+            // Check if all elements in the binding pattern are being removed
+            if (ts.isVariableDeclaration(variableDeclaration)) {
+              const elements = bindingPattern.elements;
+              const allElementsRemoved = elements.every(element =>
+                file.positions.some(p => {
+                  const pos = getPos(sourceFile, p);
+                  const token = ts.getTokenAtPosition(sourceFile, pos);
+                  return token.parent === element;
+                }),
+              );
+
+              if (allElementsRemoved) {
+                // Remove the entire variable statement
+                // variableDeclaration.parent is VariableDeclarationList
+                // VariableDeclarationList.parent is VariableStatement
+                const variableDeclarationList = variableDeclaration.parent;
+                const variableStatement = variableDeclarationList.parent;
+                if (ts.isVariableStatement(variableStatement)) {
+                  if (processedBindings.has(variableStatement.pos)) return null;
+                  processedBindings.add(variableStatement.pos);
+                  return { start: variableStatement.getFullStart(), end: variableStatement.getEnd() };
+                }
+              }
+            }
+          }
+
+          const start = bindingElement.getFullStart();
+          let end = bindingElement.getEnd();
+          if (bindingElement !== bindingPattern.elements.at(-1)) end = source.indexOf(',', end) + 1;
           return { start, end };
         }
 
