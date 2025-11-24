@@ -47,7 +47,11 @@ eslint --rule 'no-unused-vars: off' --rule '@typescript-eslint/no-unused-vars: e
 ### Biome
 
 ```sh
-biome lint --only correctness/noUnusedVariables --only correctness/noUnusedImports --reporter json | remove-unused-vars
+biome lint \
+  --only correctness/noUnusedVariables \
+  --only correctness/noUnusedImports \
+  --only correctness/noUnusedFunctionParameters \
+  --reporter json | remove-unused-vars
 ```
 
 ### oxlint

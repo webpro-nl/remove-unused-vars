@@ -23,7 +23,7 @@
     "test": "node --test ./test/*.test.js",
     "test:eslint": "eslint -c fixtures/eslint.config.js --rule 'no-unused-vars: error' --quiet -f json fixtures | ./index.js",
     "test:ts-eslint": "eslint -c fixtures/eslint.config.js --rule 'no-unused-vars: off' --rule '@typescript-eslint/no-unused-vars: error' --quiet -f json fixtures | ./index.js",
-    "test:biome": "biome lint --only correctness/noUnusedVariables --only correctness/noUnusedImports --reporter json fixtures | ./index.js",
+    "test:biome": "biome lint --only correctness/noUnusedVariables --only correctness/noUnusedImports --only correctness/noUnusedFunctionParameters --reporter json fixtures",
     "test:oxlint": "oxlint -A all -D 'no-unused-vars' -f json fixtures | ./index.js"
   },
   "devDependencies": {

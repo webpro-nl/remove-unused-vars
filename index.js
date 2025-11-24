@@ -47,7 +47,8 @@ function transformBiome(input) {
     .filter(
       diagnostic =>
         diagnostic.category === 'lint/correctness/noUnusedVariables' ||
-        diagnostic.category === 'lint/correctness/noUnusedImports',
+        diagnostic.category === 'lint/correctness/noUnusedImports' ||
+        diagnostic.category === 'lint/correctness/noUnusedFunctionParameters',
     )
     .reduce((output, diagnostic) => {
       const filePath = diagnostic.location.path.file;
@@ -125,6 +126,16 @@ function getPos(sourceFile, pos) {
   return typeof pos === 'number' ? pos : sourceFile.getPositionOfLineAndCharacter(pos[0], pos[1]);
 }
 
+function areAllParametersFlagged(parameters, positions, sourceFile) {
+  return parameters.every(paramNode => {
+    return positions.some(p => {
+      const position = getPos(sourceFile, p);
+      const tokenAtPosition = ts.getTokenAtPosition(sourceFile, position);
+      return tokenAtPosition.parent === paramNode;
+    });
+  });
+}
+
 /**
  * @typedef {Object} Results
  * @property {string} filePath
@@ -165,11 +176,9 @@ function removeUnusedVariables(results) {
           const bindingElement = token.parent;
           const bindingPattern = bindingElement.parent;
 
-          // Check if this is a destructuring pattern in a variable declaration
           if (ts.isObjectBindingPattern(bindingPattern) || ts.isArrayBindingPattern(bindingPattern)) {
             const variableDeclaration = bindingPattern.parent;
 
-            // Check if all elements in the binding pattern are being removed
             if (ts.isVariableDeclaration(variableDeclaration)) {
               const elements = bindingPattern.elements;
               const allElementsRemoved = elements.every(element =>
@@ -181,9 +190,6 @@ function removeUnusedVariables(results) {
               );
 
               if (allElementsRemoved) {
-                // Remove the entire variable statement
-                // variableDeclaration.parent is VariableDeclarationList
-                // VariableDeclarationList.parent is VariableStatement
                 const variableDeclarationList = variableDeclaration.parent;
                 const variableStatement = variableDeclarationList.parent;
                 if (ts.isVariableStatement(variableStatement)) {
@@ -212,9 +218,16 @@ function removeUnusedVariables(results) {
             }
           }
 
+          const parameters = parameter.parent.parameters;
+          const isLastParameter = parameter === parameters.at(-1);
+          if (!isLastParameter) {
+            // safety net, biome reports unused leading args before used args
+            if (!areAllParametersFlagged(parameters, file.positions, sourceFile)) return null;
+          }
+
           const start = parameter.getFullStart();
           let end = parameter.getEnd();
-          if (parameter !== parameter.parent.parameters.at(-1)) end = source.indexOf(',', end) + 1;
+          if (!isLastParameter) end = source.indexOf(',', end) + 1;
           return { start, end };
         }
 
