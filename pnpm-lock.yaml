@@ -13,22 +13,22 @@ importers:
         version: 5.9.3
     devDependencies:
       '@biomejs/biome':
-        specifier: ^2.2.5
+        specifier: ^2.3.7
         version: 2.3.7
       '@typescript-eslint/eslint-plugin':
-        specifier: ^8.46.0
+        specifier: ^8.47.0
         version: 8.47.0(@typescript-eslint/parser@8.47.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3)
       eslint:
-        specifier: ^9.37.0
+        specifier: ^9.39.1
         version: 9.39.1(jiti@2.6.1)
       oxlint:
-        specifier: ^1.22.0
+        specifier: ^1.29.0
         version: 1.29.0
       release-it:
-        specifier: ^19.0.5
+        specifier: ^19.0.6
         version: 19.0.6
       typescript-eslint:
-        specifier: ^8.46.0
+        specifier: ^8.47.0
         version: 8.47.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3)
 
 packages:

@@ -27,11 +27,11 @@
     "test:oxlint": "oxlint -A all -D 'no-unused-vars' -f json fixtures | ./index.js"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.2.5",
-    "@typescript-eslint/eslint-plugin": "^8.46.0",
-    "eslint": "^9.37.0",
-    "oxlint": "^1.22.0",
-    "release-it": "^19.0.5",
-    "typescript-eslint": "^8.46.0"
+    "@biomejs/biome": "^2.3.7",
+    "@typescript-eslint/eslint-plugin": "^8.47.0",
+    "eslint": "^9.39.1",
+    "oxlint": "^1.29.0",
+    "release-it": "^19.0.6",
+    "typescript-eslint": "^8.47.0"
   }
 }
