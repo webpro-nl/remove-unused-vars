@@ -160,125 +160,128 @@ function removeUnusedVariables(results) {
       .map(p => {
         const pos = getPos(sourceFile, p);
         const token = ts.getTokenAtPosition(sourceFile, pos);
-        if (ts.isCatchClause(token.parent.parent)) {
-          const preToken = ts.findPrecedingToken(token.getFullStart(), sourceFile);
-          const nextToken = ts.findNextToken(token, sourceFile);
-          if (preToken && nextToken && preToken.getText() === '(' && nextToken.getText() === ')') {
-            return {
-              start: preToken.getFullStart(),
-              end: nextToken.getEnd(),
-            };
+
+        if (token.parent) {
+          if (ts.isCatchClause(token.parent.parent)) {
+            const preToken = ts.findPrecedingToken(token.getFullStart(), sourceFile);
+            const nextToken = ts.findNextToken(token, sourceFile);
+            if (preToken && nextToken && preToken.getText() === '(' && nextToken.getText() === ')') {
+              return {
+                start: preToken.getFullStart(),
+                end: nextToken.getEnd(),
+              };
+            }
+            return null;
           }
-          return null;
-        }
 
-        if (ts.isBindingElement(token.parent)) {
-          const bindingElement = token.parent;
-          const bindingPattern = bindingElement.parent;
+          if (ts.isBindingElement(token.parent)) {
+            const bindingElement = token.parent;
+            const bindingPattern = bindingElement.parent;
 
-          if (ts.isObjectBindingPattern(bindingPattern) || ts.isArrayBindingPattern(bindingPattern)) {
-            const variableDeclaration = bindingPattern.parent;
+            if (ts.isObjectBindingPattern(bindingPattern) || ts.isArrayBindingPattern(bindingPattern)) {
+              const variableDeclaration = bindingPattern.parent;
 
-            if (ts.isVariableDeclaration(variableDeclaration)) {
-              const elements = bindingPattern.elements;
-              const allElementsRemoved = elements.every(element =>
-                file.positions.some(p => {
-                  const pos = getPos(sourceFile, p);
-                  const token = ts.getTokenAtPosition(sourceFile, pos);
-                  return token.parent === element;
-                }),
-              );
+              if (ts.isVariableDeclaration(variableDeclaration)) {
+                const elements = bindingPattern.elements;
+                const allElementsRemoved = elements.every(element =>
+                  file.positions.some(p => {
+                    const pos = getPos(sourceFile, p);
+                    const token = ts.getTokenAtPosition(sourceFile, pos);
+                    return token.parent === element;
+                  }),
+                );
 
-              if (allElementsRemoved) {
-                const variableDeclarationList = variableDeclaration.parent;
-                const variableStatement = variableDeclarationList.parent;
-                if (ts.isVariableStatement(variableStatement)) {
-                  if (processedBindings.has(variableStatement.pos)) return null;
-                  processedBindings.add(variableStatement.pos);
-                  return { start: variableStatement.getFullStart(), end: variableStatement.getEnd() };
+                if (allElementsRemoved) {
+                  const variableDeclarationList = variableDeclaration.parent;
+                  const variableStatement = variableDeclarationList.parent;
+                  if (ts.isVariableStatement(variableStatement)) {
+                    if (processedBindings.has(variableStatement.pos)) return null;
+                    processedBindings.add(variableStatement.pos);
+                    return { start: variableStatement.getFullStart(), end: variableStatement.getEnd() };
+                  }
                 }
               }
             }
+
+            const start = bindingElement.getFullStart();
+            let end = bindingElement.getEnd();
+            if (bindingElement !== bindingPattern.elements.at(-1)) end = source.indexOf(',', end) + 1;
+            return { start, end };
           }
 
-          const start = bindingElement.getFullStart();
-          let end = bindingElement.getEnd();
-          if (bindingElement !== bindingPattern.elements.at(-1)) end = source.indexOf(',', end) + 1;
-          return { start, end };
-        }
-
-        if (ts.isParameter(token.parent)) {
-          const parameter = token.parent;
-          const parent = parameter.parent;
-          if (ts.isArrowFunction(parent) && parent.parameters.length === 1) {
-            const hasParens =
-              source.slice(parent.parameters[0].getFullStart() - 1, parent.parameters[0].getFullStart()) === '(';
-            if (!hasParens) {
-              return { start: parameter.getFullStart(), end: parameter.getEnd(), replacement: ' ()' };
+          if (ts.isParameter(token.parent)) {
+            const parameter = token.parent;
+            const parent = parameter.parent;
+            if (ts.isArrowFunction(parent) && parent.parameters.length === 1) {
+              const hasParens =
+                source.slice(parent.parameters[0].getFullStart() - 1, parent.parameters[0].getFullStart()) === '(';
+              if (!hasParens) {
+                return { start: parameter.getFullStart(), end: parameter.getEnd(), replacement: ' ()' };
+              }
             }
+
+            const parameters = parameter.parent.parameters;
+            const isLastParameter = parameter === parameters.at(-1);
+            if (!isLastParameter) {
+              // safety net, biome reports unused leading args before used args
+              if (!areAllParametersFlagged(parameters, file.positions, sourceFile)) return null;
+            }
+
+            const start = parameter.getFullStart();
+            let end = parameter.getEnd();
+            if (!isLastParameter) end = source.indexOf(',', end) + 1;
+            return { start, end };
           }
 
-          const parameters = parameter.parent.parameters;
-          const isLastParameter = parameter === parameters.at(-1);
-          if (!isLastParameter) {
-            // safety net, biome reports unused leading args before used args
-            if (!areAllParametersFlagged(parameters, file.positions, sourceFile)) return null;
-          }
-
-          const start = parameter.getFullStart();
-          let end = parameter.getEnd();
-          if (!isLastParameter) end = source.indexOf(',', end) + 1;
-          return { start, end };
-        }
-
-        if (ts.isImportClause(token.parent)) {
-          const importDecl = token.parent.parent;
-          const nextToken = ts.findNextToken(importDecl, sourceFile);
-          const end = nextToken ? nextToken.getFullStart() : source.length;
-          return { start: importDecl.getFullStart(), end };
-        }
-
-        if (ts.isImportSpecifier(token.parent)) {
-          const importSpecifier = token.parent;
-          const importClause = importSpecifier.parent.parent;
-          const importDeclaration = importClause.parent;
-          const namedBindings = importClause.namedBindings;
-          if (!namedBindings?.elements) return null;
-          const elements = namedBindings.elements;
-          const allElementsRemoved = elements.every(element =>
-            file.positions.some(p => {
-              const pos = getPos(sourceFile, p);
-              const token = ts.getTokenAtPosition(sourceFile, pos);
-              return token.parent === element;
-            }),
-          );
-          if (allElementsRemoved) {
-            if (processedImports.has(importDeclaration.pos)) return null;
-            processedImports.add(importDeclaration.pos);
-            const nextToken = ts.findNextToken(importDeclaration, sourceFile);
+          if (ts.isImportClause(token.parent)) {
+            const importDecl = token.parent.parent;
+            const nextToken = ts.findNextToken(importDecl, sourceFile);
             const end = nextToken ? nextToken.getFullStart() : source.length;
-            return { start: importDeclaration.getFullStart(), end };
+            return { start: importDecl.getFullStart(), end };
           }
-          let start = importSpecifier.getFullStart();
-          let end = importSpecifier.getEnd();
-          if (importSpecifier === elements[0]) {
-            const nextElement = elements[1];
-            end = nextElement.getFullStart();
-          } else {
-            start = source.lastIndexOf(',', start);
+
+          if (ts.isImportSpecifier(token.parent)) {
+            const importSpecifier = token.parent;
+            const importClause = importSpecifier.parent.parent;
+            const importDeclaration = importClause.parent;
+            const namedBindings = importClause.namedBindings;
+            if (!namedBindings?.elements) return null;
+            const elements = namedBindings.elements;
+            const allElementsRemoved = elements.every(element =>
+              file.positions.some(p => {
+                const pos = getPos(sourceFile, p);
+                const token = ts.getTokenAtPosition(sourceFile, pos);
+                return token.parent === element;
+              }),
+            );
+            if (allElementsRemoved) {
+              if (processedImports.has(importDeclaration.pos)) return null;
+              processedImports.add(importDeclaration.pos);
+              const nextToken = ts.findNextToken(importDeclaration, sourceFile);
+              const end = nextToken ? nextToken.getFullStart() : source.length;
+              return { start: importDeclaration.getFullStart(), end };
+            }
+            let start = importSpecifier.getFullStart();
+            let end = importSpecifier.getEnd();
+            if (importSpecifier === elements[0]) {
+              const nextElement = elements[1];
+              end = nextElement.getFullStart();
+            } else {
+              start = source.lastIndexOf(',', start);
+            }
+            return { start, end };
           }
-          return { start, end };
-        }
 
-        if (ts.isNamespaceImport(token.parent)) {
-          const namespaceImport = token.parent;
-          const importDecl = namespaceImport.parent.parent;
-          const nextToken = ts.findNextToken(importDecl, sourceFile);
-          const end = nextToken ? nextToken.getFullStart() : source.length;
-          return { start: importDecl.getFullStart(), end };
-        }
+          if (ts.isNamespaceImport(token.parent)) {
+            const namespaceImport = token.parent;
+            const importDecl = namespaceImport.parent.parent;
+            const nextToken = ts.findNextToken(importDecl, sourceFile);
+            const end = nextToken ? nextToken.getFullStart() : source.length;
+            return { start: importDecl.getFullStart(), end };
+          }
 
-        if (ts.isImportDeclaration(token.parent)) return null;
+          if (ts.isImportDeclaration(token.parent)) return null;
+        }
 
         const node = findParentDeclaration(token);
 
