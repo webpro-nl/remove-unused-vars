@@ -69,7 +69,7 @@ function transformOxlint(input) {
       if (!output[filePath]) {
         output[filePath] = { filePath, positions: [] };
       }
-      output[filePath].positions.push(result.labels[0].span.offset);
+      output[filePath].positions.push([result.labels[0].span.line - 1, result.labels[0].span.column - 1]);
       return output;
     }, {});
   return Object.values(groupedByFile);
