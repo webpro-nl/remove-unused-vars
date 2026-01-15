@@ -12,6 +12,18 @@ if (process.argv[2]) {
   input = chunks.join('');
 }
 
+function createByteToCharConverter(source) {
+  const encoder = new TextEncoder();
+  const byteToChar = new Map();
+  let byteOffset = 0;
+  for (let charOffset = 0; charOffset < source.length; charOffset++) {
+    byteToChar.set(byteOffset, charOffset);
+    byteOffset += encoder.encode(source[charOffset]).length;
+  }
+  byteToChar.set(byteOffset, source.length);
+  return byteOffset => byteToChar.get(byteOffset) ?? source.length;
+}
+
 const Format = {
   ESLINT: 'eslint',
   OXLINT: 'oxlint',
@@ -52,24 +64,31 @@ function transformBiome(input) {
     )
     .reduce((output, diagnostic) => {
       const filePath = diagnostic.location.path.file;
+      const source = diagnostic.location.sourceCode;
       if (!output[filePath]) {
-        output[filePath] = { filePath, positions: [], source: diagnostic.location.sourceCode };
+        output[filePath] = {
+          filePath,
+          positions: [],
+          source,
+          byteToChar: createByteToCharConverter(source),
+        };
       }
-      output[filePath].positions.push(diagnostic.location.span[0]);
+      output[filePath].positions.push(output[filePath].byteToChar(diagnostic.location.span[0]));
       return output;
     }, {});
-  return Object.values(groupedByFile);
+  return Object.values(groupedByFile).map(({ filePath, positions, source }) => ({ filePath, positions, source }));
 }
 
 function transformOxlint(input) {
   const groupedByFile = input.diagnostics
-    .filter(result => result.code === 'eslint(no-unused-vars)')
+    .filter(result => result.code === 'eslint(no-unused-vars)' && result.labels?.[0]?.span)
     .reduce((output, result) => {
       const filePath = result.filename;
       if (!output[filePath]) {
         output[filePath] = { filePath, positions: [] };
       }
-      output[filePath].positions.push([result.labels[0].span.line - 1, result.labels[0].span.column - 1]);
+      const span = result.labels[0].span;
+      output[filePath].positions.push([span.line - 1, span.column - 1]);
       return output;
     }, {});
   return Object.values(groupedByFile);
@@ -95,12 +114,11 @@ function transformEslint(input) {
               return range[0] + offset;
             }
             if (range) return range[0] + (range[1] - range[0] > 1 ? 1 : 0); // i can't
-          } else {
-            // It's probably more precise to use the range from the suggestion, but the rule does not provide it yet
-            // When https://github.com/typescript-eslint/typescript-eslint/issues/10497 is fixed,
-            // then we can use the range from the suggestion.
-            return [msg.line - 1, msg.column - 1];
           }
+          // It's probably more precise to use the range from the suggestion, but the rule does not provide it yet
+          // When https://github.com/typescript-eslint/typescript-eslint/issues/10497 is fixed,
+          // then we can use the range from the suggestion.
+          return [msg.line - 1, msg.column - 1];
         }),
         source,
       };
