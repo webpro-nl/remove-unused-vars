@@ -37,8 +37,7 @@ removeUnusedVariables(unifiedResults);
 
 function detect(json) {
   if (json.diagnostics && Array.isArray(json.diagnostics)) {
-    if (json.diagnostics[0]?.category) return Format.BIOME;
-    if (json.diagnostics[0]?.code?.startsWith('eslint')) return Format.OXLINT;
+    return json.diagnostics[0]?.code?.startsWith('eslint') ? Format.OXLINT : Format.BIOME;
   }
   return Format.ESLINT;
 }
@@ -63,17 +62,21 @@ function transformBiome(input) {
         diagnostic.category === 'lint/correctness/noUnusedFunctionParameters',
     )
     .reduce((output, diagnostic) => {
-      const filePath = diagnostic.location.path.file;
-      const source = diagnostic.location.sourceCode;
+      const location = diagnostic.location;
+      const filePath = typeof location.path === 'string' ? location.path : location.path.file;
       if (!output[filePath]) {
         output[filePath] = {
           filePath,
           positions: [],
-          source,
-          byteToChar: createByteToCharConverter(source),
+          source: location.sourceCode,
+          byteToChar: location.sourceCode ? createByteToCharConverter(location.sourceCode) : null,
         };
       }
-      output[filePath].positions.push(output[filePath].byteToChar(diagnostic.location.span[0]));
+      output[filePath].positions.push(
+        location.start
+          ? [location.start.line - 1, location.start.column - 1]
+          : output[filePath].byteToChar(location.span[0]),
+      );
       return output;
     }, {});
   return Object.values(groupedByFile).map(({ filePath, positions, source }) => ({ filePath, positions, source }));
