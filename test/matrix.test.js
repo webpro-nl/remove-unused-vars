@@ -67,7 +67,15 @@ const fixtureMatrix = [
   { name: 'basic try-catch', dir: '/try-catch', input: 'input.js', output: 'output.js' },
   { name: 'basic destructure', dir: '/destructure', input: 'input.js', output: 'output.js' },
   { name: 'multibyte chars', dir: '/multibyte', input: 'input.js', output: 'output.js' },
-  { name: 'write-only var', dir: '/write-only', input: 'input.js', output: 'output.js' },
+  { name: 'write-only pure', dir: '/write-only', input: 'input.js', output: 'output.js' },
+  { name: 'write-only impure', dir: '/write-only-impure', input: 'input.js', output: 'output.js' },
+  { name: 'write-only destructure', dir: '/write-only-destructure', input: 'input.js', output: 'output.js' },
+  { name: 'write-only shadow', dir: '/write-only-shadow', input: 'input.js', output: 'output.js' },
+  { name: 'write-only asi', dir: '/write-only-asi', input: 'input.js', output: 'output.js' },
+  { name: 'write-only binding', dir: '/write-only-binding', input: 'input.js', output: 'output.js' },
+  { name: 'write-only param', dir: '/write-only-param', input: 'input.js', output: 'output.js' },
+  { name: 'write-only catch', dir: '/write-only-catch', input: 'input.js', output: 'output.js' },
+  { name: 'destructure multidecl', dir: '/destructure-multidecl', input: 'input.js', output: 'output.js' },
 ];
 
 for (const [linterName, runner] of Object.entries(lintRunners)) {
