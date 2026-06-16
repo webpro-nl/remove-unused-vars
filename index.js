@@ -140,6 +140,33 @@ function findParentDeclaration(node) {
   return node;
 }
 
+function isWriteTarget(id) {
+  const parent = id.parent;
+  if (ts.isBinaryExpression(parent) && parent.left === id && ts.isAssignmentOperator(parent.operatorToken.kind)) return true;
+  if ((ts.isPostfixUnaryExpression(parent) || ts.isPrefixUnaryExpression(parent)) && parent.operand === id) {
+    return parent.operator === ts.SyntaxKind.PlusPlusToken || parent.operator === ts.SyntaxKind.MinusMinusToken;
+  }
+  return false;
+}
+
+function isDeclarationName(token, node) {
+  if (!ts.isIdentifier(token)) return false;
+  return ts.isVariableStatement(node)
+    ? ts.isVariableDeclaration(token.parent) && token.parent.name === token
+    : node.name === token;
+}
+
+function isReassigned(name, sourceFile) {
+  let reassigned = false;
+  const visit = node => {
+    if (reassigned) return;
+    if (ts.isIdentifier(node) && node.text === name && isWriteTarget(node)) reassigned = true;
+    else ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return reassigned;
+}
+
 function getPos(sourceFile, pos) {
   return typeof pos === 'number' ? pos : sourceFile.getPositionOfLineAndCharacter(pos[0], pos[1]);
 }
@@ -304,6 +331,8 @@ function removeUnusedVariables(results) {
         const node = findParentDeclaration(token);
 
         if (!node) return null;
+
+        if (!isDeclarationName(token, node) || isReassigned(token.text, sourceFile)) return null;
 
         return { start: node.getFullStart(), end: node.getEnd() };
       })

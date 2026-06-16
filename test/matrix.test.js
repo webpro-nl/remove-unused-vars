@@ -67,6 +67,7 @@ const fixtureMatrix = [
   { name: 'basic try-catch', dir: '/try-catch', input: 'input.js', output: 'output.js' },
   { name: 'basic destructure', dir: '/destructure', input: 'input.js', output: 'output.js' },
   { name: 'multibyte chars', dir: '/multibyte', input: 'input.js', output: 'output.js' },
+  { name: 'write-only var', dir: '/write-only', input: 'input.js', output: 'output.js' },
 ];
 
 for (const [linterName, runner] of Object.entries(lintRunners)) {
