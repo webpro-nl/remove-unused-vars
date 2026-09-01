@@ -39,3 +39,22 @@ test('biome before 2.5: object path, inlined source and byte offsets', () => {
 
   assert.equal(processed, fs.readFileSync(outputFile, 'utf-8'));
 });
+
+test('eslint suggestion without a fix range falls back to line and column', () => {
+  const processed = runWithPayload([
+    {
+      filePath: inputFile,
+      source: fs.readFileSync(inputFile, 'utf-8'),
+      messages: [
+        {
+          ruleId: 'no-unused-vars',
+          line: 6,
+          column: 9,
+          suggestions: [{ desc: "Remove unused variable 'bar'.", data: { varName: 'bar' } }],
+        },
+      ],
+    },
+  ]);
+
+  assert.equal(processed, fs.readFileSync(outputFile, 'utf-8'));
+});

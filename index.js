@@ -113,9 +113,8 @@ function transformEslint(input) {
             if (!msg.suggestions) return [msg.line - 1, msg.column - 1];
             const range = msg.suggestions[0]?.fix?.range;
             const varName = msg.suggestions[0]?.data?.varName;
-            const text = source.slice(range[0], range[1]);
             if (range && varName) {
-              const offset = text.lastIndexOf(varName);
+              const offset = source.slice(range[0], range[1]).lastIndexOf(varName);
               return range[0] + offset;
             }
             if (range) return range[0] + (range[1] - range[0] > 1 ? 1 : 0); // i can't
