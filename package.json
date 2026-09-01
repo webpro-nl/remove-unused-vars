@@ -28,7 +28,6 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",
-    "@typescript-eslint/eslint-plugin": "^8.61.0",
     "eslint": "^10.5.0",
     "oxlint": "^1.69.0",
     "release-it": "^20.2.0",
