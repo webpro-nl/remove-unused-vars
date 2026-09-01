@@ -3,6 +3,9 @@
   "hooks": {
     "before:init": ["pnpm t"]
   },
+  "npm": {
+    "stage": true
+  },
   "github": {
     "release": true,
     "releaseNotes": {
