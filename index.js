@@ -62,6 +62,8 @@ function transformBiome(input) {
         diagnostic.category === 'lint/correctness/noUnusedFunctionParameters',
     )
     .reduce((output, diagnostic) => {
+      // Biome <2.5 reported `path: {file}`, byte offsets in `span`, and the file inlined as `sourceCode`;
+      // 2.5+ reports a string `path` and 1-based line/column in `start`. Both shapes stay supported.
       const location = diagnostic.location;
       const filePath = typeof location.path === 'string' ? location.path : location.path.file;
       if (!output[filePath]) {
