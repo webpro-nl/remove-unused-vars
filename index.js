@@ -104,13 +104,14 @@ function transformOxlint(input) {
     .reduce((output, result) => {
       const filePath = result.filename;
       if (!output[filePath]) {
-        output[filePath] = { filePath, positions: [] };
+        const source = readFileSync(filePath, 'utf-8');
+        output[filePath] = { filePath, positions: [], source, byteToChar: createByteToCharConverter(source) };
       }
       const span = result.labels[0].span;
-      output[filePath].positions.push([span.line - 1, span.column - 1]);
+      output[filePath].positions.push(output[filePath].byteToChar(span.offset));
       return output;
     }, {});
-  return Object.values(groupedByFile);
+  return Object.values(groupedByFile).map(({ filePath, positions, source }) => ({ filePath, positions, source }));
 }
 
 function transformEslint(input) {
