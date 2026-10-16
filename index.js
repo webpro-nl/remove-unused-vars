@@ -16,12 +16,29 @@ function createByteToCharConverter(source) {
   const encoder = new TextEncoder();
   const byteToChar = new Map();
   let byteOffset = 0;
-  for (let charOffset = 0; charOffset < source.length; charOffset++) {
+  let charOffset = 0;
+  for (const char of source) {
     byteToChar.set(byteOffset, charOffset);
-    byteOffset += encoder.encode(source[charOffset]).length;
+    byteOffset += encoder.encode(char).length;
+    charOffset += char.length;
   }
   byteToChar.set(byteOffset, source.length);
   return byteOffset => byteToChar.get(byteOffset) ?? source.length;
+}
+
+function createLineColumnToCharConverter(source) {
+  // Biome counts Unicode code points and treats only CR and LF as line breaks.
+  const lineStarts = [0];
+  for (const match of source.matchAll(/\r\n|\r|\n/g)) {
+    lineStarts.push(match.index + match[0].length);
+  }
+  return ({ line, column }) => {
+    let offset = lineStarts[line - 1];
+    for (let i = 1; i < column; i++) {
+      offset += source.codePointAt(offset) > 0xffff ? 2 : 1;
+    }
+    return offset;
+  };
 }
 
 const Format = {
@@ -67,18 +84,15 @@ function transformBiome(input) {
       const location = diagnostic.location;
       const filePath = typeof location.path === 'string' ? location.path : location.path.file;
       if (!output[filePath]) {
+        const source = location.sourceCode ?? readFileSync(filePath, 'utf-8');
         output[filePath] = {
           filePath,
           positions: [],
-          source: location.sourceCode,
-          byteToChar: location.sourceCode ? createByteToCharConverter(location.sourceCode) : null,
+          source,
+          toChar: location.start ? createLineColumnToCharConverter(source) : createByteToCharConverter(source),
         };
       }
-      output[filePath].positions.push(
-        location.start
-          ? [location.start.line - 1, location.start.column - 1]
-          : output[filePath].byteToChar(location.span[0]),
-      );
+      output[filePath].positions.push(output[filePath].toChar(location.start ?? location.span[0]));
       return output;
     }, {});
   return Object.values(groupedByFile).map(({ filePath, positions, source }) => ({ filePath, positions, source }));
