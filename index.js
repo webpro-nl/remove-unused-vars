@@ -306,6 +306,25 @@ function removeUnusedVariables(results) {
             return { start: importDecl.getFullStart(), end };
           }
 
+          if (ts.isNamedImports(token.parent) && token.kind === ts.SyntaxKind.OpenBraceToken) {
+            // Biome reports an unused named import group at its opening brace.
+            const namedImports = token.parent;
+            if (namedImports.elements.length === 0) return null;
+            const importClause = namedImports.parent;
+            if (importClause.name) {
+              const end = namedImports.getEnd();
+              return {
+                start: importClause.name.getEnd(),
+                end,
+                replacement: /\s/.test(source[end] ?? '') ? '' : ' ',
+              };
+            }
+            const importDeclaration = importClause.parent;
+            const nextToken = ts.findNextToken(importDeclaration, sourceFile);
+            const end = nextToken ? nextToken.getFullStart() : source.length;
+            return { start: importDeclaration.getFullStart(), end };
+          }
+
           if (ts.isImportSpecifier(token.parent)) {
             const importSpecifier = token.parent;
             const importClause = importSpecifier.parent.parent;
