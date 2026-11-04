@@ -220,7 +220,7 @@ function removeUnusedVariables(results) {
     const sourceFile = ts.createSourceFile(file.filePath, source, ts.ScriptTarget.Latest, true);
 
     const processedImports = new Set();
-    const processedBindings = new Set();
+    const removedDeclarations = new Set();
 
     const positions = file.positions
       .map(p => {
@@ -261,9 +261,8 @@ function removeUnusedVariables(results) {
                   const variableDeclarationList = variableDeclaration.parent;
                   const variableStatement = variableDeclarationList.parent;
                   if (ts.isVariableStatement(variableStatement)) {
-                    if (processedBindings.has(variableStatement.pos)) return null;
-                    processedBindings.add(variableStatement.pos);
-                    return { start: variableStatement.getFullStart(), end: variableStatement.getEnd() };
+                    removedDeclarations.add(variableDeclaration);
+                    return null;
                   }
                 }
               }
@@ -355,9 +354,40 @@ function removeUnusedVariables(results) {
 
         if (!isDeclarationName(token, node) || isReassigned(token.text, sourceFile)) return null;
 
+        if (ts.isVariableStatement(node)) {
+          if (token.parent.parent !== node.declarationList) return null;
+          removedDeclarations.add(token.parent);
+          return null;
+        }
+
         return { start: node.getFullStart(), end: node.getEnd() };
       })
       .filter(Boolean);
+
+    for (const declarationList of new Set([...removedDeclarations].map(declaration => declaration.parent))) {
+      const declarations = declarationList.declarations;
+      if (declarations.every(declaration => removedDeclarations.has(declaration))) {
+        const statement = declarationList.parent;
+        positions.push({ start: statement.getFullStart(), end: statement.getEnd() });
+        continue;
+      }
+
+      for (let first = 0; first < declarations.length; first++) {
+        if (!removedDeclarations.has(declarations[first])) continue;
+        let last = first;
+        while (last + 1 < declarations.length && removedDeclarations.has(declarations[last + 1])) last++;
+
+        // Remove adjacent declarators together so their comma ranges never overlap.
+        // AST boundaries also keep commas inside comments out of separator handling.
+        const isLast = last === declarations.length - 1;
+        positions.push({
+          start: isLast ? declarations[first - 1].getEnd() : declarations[first].getFullStart(),
+          end: isLast ? declarations[last].getEnd() : declarations[last + 1].getFullStart(),
+          replacement: first === 0 ? ' ' : '',
+        });
+        first = last;
+      }
+    }
 
     if (positions.length > 0) {
       let output = source;
