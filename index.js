@@ -54,7 +54,8 @@ removeUnusedVariables(unifiedResults);
 
 function detect(json) {
   if (json.diagnostics && Array.isArray(json.diagnostics)) {
-    return json.diagnostics[0]?.code?.startsWith('eslint') ? Format.OXLINT : Format.BIOME;
+    // Parser errors have no code, so inspect later diagnostics too.
+    return json.diagnostics.some(diagnostic => diagnostic.code?.startsWith('eslint')) ? Format.OXLINT : Format.BIOME;
   }
   return Format.ESLINT;
 }
