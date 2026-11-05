@@ -161,13 +161,26 @@ function findParentDeclaration(node) {
 
 function isWriteTarget(id) {
   const parent = id.parent;
-  if (ts.isBinaryExpression(parent) && parent.left === id && ts.isAssignmentOperator(parent.operatorToken.kind)) {
-    return true;
-  }
   if ((ts.isPostfixUnaryExpression(parent) || ts.isPrefixUnaryExpression(parent)) && parent.operand === id) {
     return parent.operator === ts.SyntaxKind.PlusPlusToken || parent.operator === ts.SyntaxKind.MinusMinusToken;
   }
-  return false;
+  // Climb out of destructuring patterns, e.g. `[id] = …`, `({ key: id } = …)`, `for ([id] of …)`
+  let target = id;
+  while (
+    ts.isArrayLiteralExpression(target.parent) ||
+    ts.isObjectLiteralExpression(target.parent) ||
+    ts.isSpreadElement(target.parent) ||
+    ts.isSpreadAssignment(target.parent) ||
+    (ts.isShorthandPropertyAssignment(target.parent) && target.parent.name === target) ||
+    (ts.isPropertyAssignment(target.parent) && target.parent.initializer === target)
+  ) {
+    target = target.parent;
+  }
+  const container = target.parent;
+  if (ts.isBinaryExpression(container) && container.left === target) {
+    return ts.isAssignmentOperator(container.operatorToken.kind);
+  }
+  return (ts.isForOfStatement(container) || ts.isForInStatement(container)) && container.initializer === target;
 }
 
 function isDeclarationName(token, node) {
