@@ -120,25 +120,14 @@ function transformEslint(input) {
     .filter(result => result.messages.some(predicate))
     .map(result => {
       const source = result.source ?? readFileSync(result.filePath, 'utf-8');
+      const bomOffset = source.charCodeAt(0) === 0xfeff ? 1 : 0;
       return {
         filePath: result.filePath,
-        positions: result.messages.filter(predicate).map(msg => {
-          if (msg.ruleId === 'no-unused-vars') {
-            // catch clause no suggestions
-            if (!msg.suggestions) return [msg.line - 1, msg.column - 1];
-            const range = msg.suggestions[0]?.fix?.range;
-            const varName = msg.suggestions[0]?.data?.varName;
-            if (range && varName) {
-              const offset = source.slice(range[0], range[1]).lastIndexOf(varName);
-              return range[0] + offset;
-            }
-            if (range) return range[0] + (range[1] - range[0] > 1 ? 1 : 0); // i can't
-          }
-          // It's probably more precise to use the range from the suggestion, but the rule does not provide it yet
-          // When https://github.com/typescript-eslint/typescript-eslint/issues/10497 is fixed,
-          // then we can use the range from the suggestion.
-          return [msg.line - 1, msg.column - 1];
-        }),
+        // Suggestions can cover whole declarations, including other occurrences of the name.
+        // Use the reported identifier; write-only reports still pass through the reassignment guards.
+        positions: result.messages
+          .filter(predicate)
+          .map(msg => [msg.line - 1, msg.column - 1 + (msg.line === 1 ? bomOffset : 0)]),
         source,
       };
     });
@@ -268,9 +257,24 @@ function removeUnusedVariables(results) {
               }
             }
 
+            const restElement = ts.isObjectBindingPattern(bindingPattern)
+              ? bindingPattern.elements.find(element => element.dotDotDotToken)
+              : undefined;
+            if (
+              restElement &&
+              restElement !== bindingElement &&
+              !file.positions.some(p => ts.getTokenAtPosition(sourceFile, getPos(sourceFile, p)).parent === restElement)
+            ) {
+              return null;
+            }
+
             const start = bindingElement.getFullStart();
             let end = bindingElement.getEnd();
-            if (bindingElement !== bindingPattern.elements.at(-1)) end = source.indexOf(',', end) + 1;
+            if (!ts.isArrayBindingPattern(bindingPattern) && bindingElement !== bindingPattern.elements.at(-1)) {
+              const comma = ts.findNextToken(bindingElement, sourceFile);
+              if (comma?.kind !== ts.SyntaxKind.CommaToken) return null;
+              end = comma.getEnd();
+            }
             return { start, end };
           }
 
@@ -294,7 +298,11 @@ function removeUnusedVariables(results) {
 
             const start = parameter.getFullStart();
             let end = parameter.getEnd();
-            if (!isLastParameter) end = source.indexOf(',', end) + 1;
+            if (!isLastParameter) {
+              const comma = ts.findNextToken(parameter, sourceFile);
+              if (comma?.kind !== ts.SyntaxKind.CommaToken) return null;
+              end = comma.getEnd();
+            }
             return { start, end };
           }
 
@@ -360,15 +368,53 @@ function removeUnusedVariables(results) {
           return null;
         }
 
-        return { start: node.getFullStart(), end: node.getEnd() };
+        const statements = node.parent.statements;
+        const next = statements?.[statements.indexOf(node) + 1];
+        const needsBody =
+          (ts.isFunctionDeclaration(node) && (ts.isIfStatement(node.parent) || ts.isLabeledStatement(node.parent))) ||
+          (next && ts.isExpressionStatement(next) && ts.isStringLiteral(next.expression));
+        return { start: node.getFullStart(), end: node.getEnd(), replacement: needsBody ? ';' : '' };
       })
       .filter(Boolean);
 
-    for (const declarationList of new Set([...removedDeclarations].map(declaration => declaration.parent))) {
+    const declarationLists = new Set([...removedDeclarations].map(declaration => declaration.parent));
+    const removedStatements = new Set(
+      [...declarationLists]
+        .filter(list => list.declarations.every(declaration => removedDeclarations.has(declaration)))
+        .map(list => list.parent),
+    );
+    const removalsByEnd = new Map(positions.map(position => [position.end, position]));
+    const isRemovedStatement = statement => {
+      const removal = removalsByEnd.get(statement.getEnd());
+      return (
+        removedStatements.has(statement) ||
+        (removal && removal.start <= statement.getStart(sourceFile) && !removal.replacement)
+      );
+    };
+    for (const declarationList of declarationLists) {
       const declarations = declarationList.declarations;
-      if (declarations.every(declaration => removedDeclarations.has(declaration))) {
+      if (removedStatements.has(declarationList.parent)) {
         const statement = declarationList.parent;
-        positions.push({ start: statement.getFullStart(), end: statement.getEnd() });
+        const parent = statement.parent;
+        const statementIndex = parent.statements?.indexOf(statement) ?? -1;
+        let previousIndex = statementIndex - 1;
+        let previous = statementIndex > 0 ? parent.statements[previousIndex] : undefined;
+        while (previous && isRemovedStatement(previous)) previous = parent.statements[--previousIndex];
+        let nextIndex = statementIndex + 1;
+        let next = statementIndex >= 0 ? parent.statements[nextIndex] : undefined;
+        while (next && isRemovedStatement(next)) next = parent.statements[++nextIndex];
+        const needsBody =
+          ts.isIfStatement(parent) ||
+          ts.isIterationStatement(parent, false) ||
+          ts.isLabeledStatement(parent) ||
+          ts.isWithStatement(parent) ||
+          (previous && previous.getLastToken(sourceFile)?.kind !== ts.SyntaxKind.SemicolonToken) ||
+          (next && ts.isExpressionStatement(next) && ts.isStringLiteral(next.expression));
+        positions.push({
+          start: statement.getFullStart(),
+          end: statement.getEnd(),
+          replacement: needsBody ? ';' : '',
+        });
         continue;
       }
 
@@ -380,8 +426,10 @@ function removeUnusedVariables(results) {
         // Remove adjacent declarators together so their comma ranges never overlap.
         // AST boundaries also keep commas inside comments out of separator handling.
         const isLast = last === declarations.length - 1;
+        const precedingComma = isLast ? ts.findNextToken(declarations[first - 1], sourceFile) : undefined;
+        if (isLast && precedingComma?.kind !== ts.SyntaxKind.CommaToken) continue;
         positions.push({
-          start: isLast ? declarations[first - 1].getEnd() : declarations[first].getFullStart(),
+          start: isLast ? precedingComma.getStart(sourceFile) : declarations[first].getFullStart(),
           end: isLast ? declarations[last].getEnd() : declarations[last + 1].getFullStart(),
           replacement: first === 0 ? ' ' : '',
         });
@@ -391,6 +439,7 @@ function removeUnusedVariables(results) {
 
     if (positions.length > 0) {
       let output = source;
+      const shebangEnd = source.match(/^#![^\r\n\u2028\u2029]*(?:\r\n|[\r\n\u2028\u2029]|$)/)?.[0].length ?? 0;
       positions.sort((a, b) => {
         return b.end - a.end;
       });
@@ -399,7 +448,8 @@ function removeUnusedVariables(results) {
       for (const { start, end, replacement } of positions) {
         // skip covered positions
         if (end <= lastStart) {
-          output = output.slice(0, start) + (replacement ?? '') + output.slice(end);
+          // Keep the executable directive outside every removal range.
+          output = output.slice(0, Math.max(start, shebangEnd)) + (replacement ?? '') + output.slice(end);
           lastStart = start;
         }
       }
