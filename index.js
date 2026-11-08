@@ -316,7 +316,8 @@ function removeUnusedVariables(results) {
           if (
             ts.isImportClause(token.parent) ||
             ts.isImportSpecifier(token.parent) ||
-            ts.isNamespaceImport(token.parent)
+            ts.isNamespaceImport(token.parent) ||
+            (ts.isNamedImports(token.parent) && token.kind === ts.SyntaxKind.OpenBraceToken)
           ) {
             const importClause = ts.isImportClause(token.parent)
               ? token.parent
@@ -337,7 +338,13 @@ function removeUnusedVariables(results) {
               bindings.filter(binding =>
                 file.positions.some(p => {
                   const token = ts.getTokenAtPosition(sourceFile, getPos(sourceFile, p));
-                  return token === binding || token.parent === binding;
+                  return (
+                    token === binding ||
+                    token.parent === binding ||
+                    (ts.isNamedImports(token.parent) &&
+                      token.kind === ts.SyntaxKind.OpenBraceToken &&
+                      binding.parent === token.parent)
+                  );
                 }),
               ),
             );

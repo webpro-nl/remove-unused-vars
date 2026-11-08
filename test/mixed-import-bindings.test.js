@@ -325,7 +325,7 @@ test('Biome mixed ranges: real current reports and derived legacy byte spans', a
     { name: 'all unused named', clause: 'unused, { kept }', allUnused: true },
     { name: 'all unused namespace', clause: 'unused, /* café 🎉 */\r\n * as namespace', allUnused: true },
     { name: 'used named', clause: 'unused, { kept }', value: 'kept' },
-    { name: 'used default with named', clause: 'kept, { unused }', value: 'kept', remaining: 1 },
+    { name: 'used default with named', clause: 'kept, { unused }', value: 'kept' },
     { name: 'used namespace', clause: 'unused, /* café 🎉 */ * as namespace', value: 'namespace.kept' },
     { name: 'used default with namespace', clause: 'kept, * as unused', value: 'kept' },
     {
@@ -404,7 +404,7 @@ test('Biome mixed ranges: real current reports and derived legacy byte spans', a
           cwd: directory,
         });
         assert.equal(remaining.status, 0, remaining.stderr);
-        // Partial named ranges retain the existing limitation handled separately by PR15.
+        // Partial named ranges can still leave individual unused specifiers.
         // Their safety contract here is the real consumer above, including module effects.
         assert.equal(JSON.parse(remaining.stdout).diagnostics.length, fixture.remaining ?? 0);
       });
