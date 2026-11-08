@@ -55,6 +55,8 @@ const cases = [
   },
   {
     name: 'object used rest binding',
+    remaining: ['unused'],
+    unchanged: true,
     source: 'const { unused /* keep, comment */, ...kept } = { value: 42 }; console.log(kept.value);',
     unused: ['unused'],
     comments: ['/* keep, comment */'],

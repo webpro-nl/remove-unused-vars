@@ -1,0 +1,1 @@
+console.log(42); if(true) console.log("kept"); else;

@@ -4,6 +4,10 @@ import { execSync } from 'node:child_process';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { transformFixture } from './fixture-helpers.js';
+
+const declarationFixtures = JSON.parse(fs.readFileSync(new URL('./declaration-fixtures.json', import.meta.url)));
+
 const fixturesDir = path.join(path.resolve(), 'fixtures');
 
 const normalizeWhitespace = text => {
@@ -58,6 +62,7 @@ const lintRunners = {
 };
 
 const fixtureMatrix = [
+  ...declarationFixtures,
   { name: 'basic const', dir: '/const', input: 'input.js', output: 'output.js' },
   { name: 'basic function', dir: '/function', input: 'input.js', output: 'output.js' },
   { name: 'basic import', dir: '/import', input: 'input.js', output: 'output.js', skip: ['biome'] },
@@ -75,10 +80,14 @@ for (const [linterName, runner] of Object.entries(lintRunners)) {
   for (const fixture of fixtureMatrix) {
     if (fixture.only && !fixture.only.includes(linterName)) continue;
     if (fixture.skip?.includes(linterName)) continue;
-    test(`${linterName} ${fixture.name}`, () => {
+    test(`${linterName} ${fixture.name}`, async () => {
       const inputFile = path.join(fixturesDir, `${fixture.dir}/${fixture.input}`);
       const expectOutputFile = path.join(fixturesDir, `${fixture.dir}/${fixture.output}`);
-      execLint(inputFile, expectOutputFile, runner);
+      if (fixture.diagnostic) {
+        await transformFixture(fixture, linterName, output => {
+          assert.equal(output, fs.readFileSync(expectOutputFile, 'utf8'));
+        });
+      } else execLint(inputFile, expectOutputFile, runner);
     });
   }
 }

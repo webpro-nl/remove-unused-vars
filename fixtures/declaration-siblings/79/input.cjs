@@ -1,0 +1,1 @@
+console.log(42); label: function msg(){return "msg";}
