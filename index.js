@@ -191,6 +191,17 @@ function areAllParametersFlagged(parameters, positions, sourceFile) {
   });
 }
 
+function getListElementRemoval(node, sourceFile) {
+  const start = node.getFullStart();
+  const end = node.getEnd();
+  const nextToken = ts.findNextToken(node, sourceFile);
+  if (nextToken?.kind === ts.SyntaxKind.CommaToken) {
+    // Include a trailing comma, but preserve comments between the element and its separator.
+    return { start, end: nextToken.getEnd(), replacement: sourceFile.text.slice(end, nextToken.getStart(sourceFile)) };
+  }
+  return { start, end };
+}
+
 /**
  * @typedef {Object} Results
  * @property {string} filePath
@@ -267,6 +278,7 @@ function removeUnusedVariables(results) {
             ) {
               return null;
             }
+            if (ts.isObjectBindingPattern(bindingPattern)) return getListElementRemoval(bindingElement, sourceFile);
 
             const start = bindingElement.getFullStart();
             let end = bindingElement.getEnd();
@@ -296,14 +308,7 @@ function removeUnusedVariables(results) {
               if (!areAllParametersFlagged(parameters, file.positions, sourceFile)) return null;
             }
 
-            const start = parameter.getFullStart();
-            let end = parameter.getEnd();
-            if (!isLastParameter) {
-              const comma = ts.findNextToken(parameter, sourceFile);
-              if (comma?.kind !== ts.SyntaxKind.CommaToken) return null;
-              end = comma.getEnd();
-            }
-            return { start, end };
+            return getListElementRemoval(parameter, sourceFile);
           }
 
           if (ts.isImportClause(token.parent)) {
