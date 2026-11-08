@@ -1,0 +1,24 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/setup@v3
+        with:
+          version: 12
+          runtime: node@26
+          cache: true
+          require-lockfile: true
+      # The tests share writable fixtures, so run test files serially.
+      - run: node --test --test-concurrency=1 ./test/*.test.js
