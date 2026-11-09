@@ -141,6 +141,79 @@ for (const [name, separator, start] of [
   });
 }
 
+// The matrix lints one file at a time and cannot control cross-file diagnostic order.
+for (const order of ['before', 'after']) {
+  test(`Oxlint report: parser error ${order} unused diagnostics`, t => {
+    const source = `const unused = 1;
+const { first, /* punctuation, stays inside this declaration */ second } = { first: 1, second: 2 };
+export function kept(value) {
+  let pending = 0;
+  pending = value;
+  return value * 2;
+}
+console.log(kept(21));
+`;
+    let brokenPath;
+    const actual = runReport(t, source, filePath => {
+      brokenPath = path.join(path.dirname(filePath), 'broken.js');
+      writeFileSync(brokenPath, 'const broken = ;\n');
+      const parserError = {
+        message: 'Unexpected token',
+        severity: 'error',
+        filename: brokenPath,
+        labels: [{ span: { offset: 15, length: 1, line: 1, column: 16 } }],
+      };
+      const unused = [
+        [6, 6],
+        [26, 5],
+        [82, 6],
+        [154, 7],
+      ].map(([offset, length]) => ({
+        code: 'eslint(no-unused-vars)',
+        filename: filePath,
+        labels: [{ span: { offset, length } }],
+      }));
+      return { diagnostics: order === 'before' ? [parserError, ...unused] : [...unused, parserError] };
+    });
+    assert.equal(
+      actual,
+      `
+export function kept(value) {
+  let pending = 0;
+  pending = value;
+  return value * 2;
+}
+console.log(kept(21));
+`,
+    );
+    assert.equal(readFileSync(brokenPath, 'utf8'), 'const broken = ;\n');
+  });
+}
+
+// The matrix does not enable debugger rules.
+for (const [name, createReport] of [
+  ['ESLint', filePath => [{ filePath, messages: [{ ruleId: 'no-debugger', line: 1, column: 1 }] }]],
+  [
+    'Biome',
+    filePath => ({
+      diagnostics: [
+        { category: 'lint/suspicious/noDebugger', location: { path: filePath, start: { line: 1, column: 1 } } },
+      ],
+    }),
+  ],
+  [
+    'Oxlint',
+    filePath => ({
+      diagnostics: [{ code: 'eslint(no-debugger)', filename: filePath, labels: [{ span: { offset: 0, length: 9 } }] }],
+    }),
+  ],
+]) {
+  test(`${name} unrelated rule leaves source unchanged`, t => {
+    const actual = runReport(t, 'debugger;\nconsole.log(42);\n', createReport);
+    assert.equal(actual, 'debugger;\nconsole.log(42);\n');
+  });
+}
+
 for (const [name, report] of [
   ['ESLint', []],
   ['Biome', { summary: {}, diagnostics: [], command: 'lint' }],

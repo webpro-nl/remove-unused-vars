@@ -59,6 +59,20 @@ const lintRunners = {
 
 const fixtureMatrix = [
   {
+    name: 'Oxlint parser errors: removes unused declarations and preserves reassigned variables',
+    dir: '/oxlint-parser-errors/case-0',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'Oxlint parser errors: leaves an invalid file unchanged',
+    dir: '/oxlint-parser-errors/case-1',
+    input: 'input.js',
+    output: 'output.js',
+    // Biome also reports the invalid declaration as unused and removes it.
+    skip: ['biome'],
+  },
+  {
     name: 'import clauses: preserves a used default and side-effect import',
     dir: '/import-clauses/case-0',
     input: 'input.js',
