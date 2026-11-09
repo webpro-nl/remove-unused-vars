@@ -136,8 +136,6 @@ const fixtureMatrix = [
     input: 'input.js',
     output: 'output.js',
   },
-  // Biome reports several unused specifiers as one range that can include used ones. Only the binding at its
-  // start is removed, so the cases that skip Biome would keep other unused specifiers there.
   {
     name: 'import clauses: unused named without whitespace before from',
     dir: '/import-clauses/case-13',
@@ -179,56 +177,48 @@ const fixtureMatrix = [
     dir: '/import-clauses/case-19',
     input: 'input.js',
     output: 'output.js',
-    skip: ['biome'],
   },
   {
     name: 'import clauses: default and trailing named removed',
     dir: '/import-clauses/case-20',
     input: 'input.js',
     output: 'output.js',
-    skip: ['biome'],
   },
   {
     name: 'import clauses: adjacent leading named removed',
     dir: '/import-clauses/case-21',
     input: 'input.js',
     output: 'output.js',
-    skip: ['biome'],
   },
   {
     name: 'import clauses: adjacent trailing named removed',
     dir: '/import-clauses/case-22',
     input: 'input.js',
     output: 'output.js',
-    skip: ['biome'],
   },
   {
     name: 'import clauses: nonadjacent named removed',
     dir: '/import-clauses/case-23',
     input: 'input.js',
     output: 'output.js',
-    skip: ['biome'],
   },
   {
     name: 'import clauses: named only adjacent removal',
     dir: '/import-clauses/case-24',
     input: 'input.js',
     output: 'output.js',
-    skip: ['biome'],
   },
   {
     name: 'import clauses: named only trailing removal',
     dir: '/import-clauses/case-25',
     input: 'input.js',
     output: 'output.js',
-    skip: ['biome'],
   },
   {
     name: 'import clauses: aliased imports',
     dir: '/import-clauses/case-26',
     input: 'input.js',
     output: 'output.js',
-    skip: ['biome'],
   },
   {
     name: 'import clauses: string imported name',
@@ -241,14 +231,12 @@ const fixtureMatrix = [
     dir: '/import-clauses/case-28',
     input: 'input.js',
     output: 'output.js',
-    skip: ['biome'],
   },
   {
     name: 'import clauses: line comments',
     dir: '/import-clauses/case-29',
     input: 'input.js',
     output: 'output.js',
-    skip: ['biome'],
   },
   {
     name: 'import clauses: namespace comments',
@@ -333,14 +321,12 @@ const fixtureMatrix = [
     dir: '/import-clauses/case-43',
     input: 'input.ts',
     output: 'output.ts',
-    skip: ['biome'],
   },
   {
     name: 'import clauses: type trailing comma and comments',
     dir: '/import-clauses/case-44',
     input: 'input.ts',
     output: 'output.ts',
-    skip: ['biome'],
   },
   {
     name: 'import clauses: all unused types',
@@ -395,7 +381,65 @@ const fixtureMatrix = [
     dir: '/import-clauses/case-53',
     input: 'input.js',
     output: 'output.js',
-    skip: ['biome'],
+  },
+  {
+    name: 'import clauses: keeps a ranged binding mentioned only as a property',
+    dir: '/import-clauses/case-54',
+    input: 'input.js',
+    output: 'output.js',
+    // Other linters report each binding; only Biome needs the conservative name-occurrence check.
+    only: ['biome'],
+  },
+  {
+    name: 'import clauses: keeps a ranged binding with a shadowing declaration',
+    dir: '/import-clauses/case-55',
+    input: 'input.js',
+    output: 'output.js',
+    // Other linters report the unused import separately from the shadowing parameter.
+    only: ['biome'],
+  },
+  {
+    name: 'import clauses: preserves a type reference between unused bindings',
+    dir: '/import-clauses/case-56',
+    input: 'input.ts',
+    output: 'output.ts',
+  },
+  {
+    name: 'import clauses: removes a wholly unused namespace with a matching property name',
+    dir: '/import-clauses/case-57',
+    input: 'input.js',
+    output: 'output.js',
+    // Biome's whole-clause range confirms both bindings are unused despite the property name.
+  },
+  {
+    name: 'import clauses: preserves exports, shorthand properties and typeof in a range',
+    dir: '/import-clauses/case-58',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'import clauses: keeps later bindings in a partial JSX range',
+    dir: '/import-clauses/case-59',
+    input: 'input.tsx',
+    output: 'output.tsx',
+    // Only Biome groups partial ranges; JSX factories can use bindings implicitly.
+    only: ['biome'],
+  },
+  {
+    name: 'import clauses: preserves a JSX reference between individually reported unused bindings',
+    dir: '/import-clauses/case-59',
+    input: 'input.tsx',
+    output: 'output-oxlint.tsx',
+    // Oxlint reports each unused binding separately; keep its existing coverage.
+    only: ['oxlint'],
+  },
+  {
+    name: 'import clauses: preserves a binding referenced only in JSDoc',
+    dir: '/import-clauses/case-60',
+    input: 'input.js',
+    output: 'output.js',
+    // Other linters report the JSDoc-only binding as unused.
+    only: ['biome'],
   },
   { name: 'basic const', dir: '/const', input: 'input.js', output: 'output.js' },
   { name: 'basic function', dir: '/function', input: 'input.js', output: 'output.js' },

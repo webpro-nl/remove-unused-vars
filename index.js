@@ -190,15 +190,30 @@ function isDeclarationName(token, node) {
     : node.name === token;
 }
 
-function isReassigned(name, sourceFile) {
-  let reassigned = false;
+function hasMatchingIdentifier(name, sourceFile, predicate) {
+  let found = false;
   const visit = node => {
-    if (reassigned) return;
-    if (ts.isIdentifier(node) && node.text === name && isWriteTarget(node)) reassigned = true;
+    if (found) return;
+    if (ts.isIdentifier(node) && node.text === name && predicate(node)) found = true;
     else ts.forEachChild(node, visit);
+    node.jsDoc?.forEach(visit);
   };
   visit(sourceFile);
-  return reassigned;
+  return found;
+}
+
+function hasImplicitReferences(node) {
+  return (
+    ts.isJsxElement(node) ||
+    ts.isJsxSelfClosingElement(node) ||
+    ts.isJsxFragment(node) ||
+    // Downlevel helpers can reference imported globals such as Reflect or Promise.
+    ts.isDecorator(node) ||
+    node.kind === ts.SyntaxKind.AsyncKeyword ||
+    // Any eval identifier may be a direct call, including parenthesized calls.
+    (ts.isIdentifier(node) && node.text === 'eval') ||
+    ts.forEachChild(node, hasImplicitReferences)
+  );
 }
 
 function getPos(sourceFile, pos) {
@@ -232,6 +247,7 @@ function removeUnusedVariables(results) {
 
     const source = file.source ?? readFileSync(file.filePath, 'utf-8');
     const sourceFile = ts.createSourceFile(file.filePath, source, ts.ScriptTarget.Latest, true);
+    const hasImplicitUsage = hasImplicitReferences(sourceFile);
 
     const processedImports = new Set();
     const processedBindings = new Set();
@@ -348,14 +364,28 @@ function removeUnusedVariables(results) {
                 }),
               ),
             );
-            // Biome can report all mixed bindings with one range starting at the default.
-            // A partial range must never imply that the remaining bindings are unused.
+            // Biome covers the whole mixed clause only when every binding is unused.
             const wholeMixedClause =
               importClause.name &&
               namedBindings &&
               file.importRanges?.some(
                 range => range.start <= importClause.getStart(sourceFile) && range.end >= importClause.getEnd(),
               );
+            // Partial ranges can include used bindings; even unrelated occurrences keep a binding.
+            // JSX factories, downlevel helpers and direct eval can use bindings implicitly.
+            for (const binding of bindings) {
+              if (wholeMixedClause || hasImplicitUsage || flagged.has(binding)) continue;
+              const inRange = file.importRanges?.some(
+                range => range.start <= binding.getStart(sourceFile) && range.end >= binding.getEnd(),
+              );
+              const name = ts.isIdentifier(binding) ? binding.text : binding.name.text;
+              if (
+                inRange &&
+                !hasMatchingIdentifier(name, sourceFile, node => node !== binding && node.parent !== binding)
+              ) {
+                flagged.add(binding);
+              }
+            }
             if (wholeMixedClause || bindings.every(binding => flagged.has(binding))) {
               const nextToken = ts.findNextToken(importDeclaration, sourceFile);
               const end = nextToken ? nextToken.getFullStart() : source.length;
@@ -408,7 +438,9 @@ function removeUnusedVariables(results) {
 
         if (!node) return null;
 
-        if (!isDeclarationName(token, node) || isReassigned(token.text, sourceFile)) return null;
+        if (!isDeclarationName(token, node) || hasMatchingIdentifier(token.text, sourceFile, isWriteTarget)) {
+          return null;
+        }
 
         return { start: node.getFullStart(), end: node.getEnd() };
       })
