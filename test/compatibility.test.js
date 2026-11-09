@@ -151,3 +151,47 @@ for (const [name, report] of [
     assert.equal(actual, 'export const kept = 1;\n');
   });
 }
+
+// The matrix normalizes whitespace, so these cases check the directive and line endings exactly.
+const shebangCases = [
+  {
+    name: 'CRLF directive',
+    source: '#!/usr/bin/env node\r\nconst unused = 1;\r\nconsole.log(42);\r\n',
+    expected: '#!/usr/bin/env node\r\n\r\nconsole.log(42);\r\n',
+    column: 7,
+  },
+  {
+    name: 'last import without final newline',
+    source: '#!/usr/bin/env node\nimport unused from "./values.mjs";',
+    expected: '#!/usr/bin/env node\n',
+    column: 8,
+  },
+];
+
+for (const ruleId of ['no-unused-vars', '@typescript-eslint/no-unused-vars']) {
+  for (const fixture of shebangCases) {
+    test(`shebang ${ruleId}: ${fixture.name}`, t => {
+      const actual = runReport(t, fixture.source, filePath => [
+        {
+          filePath,
+          messages: [{ ruleId, line: 2, column: fixture.column }],
+        },
+      ]);
+      assert.equal(actual, fixture.expected);
+    });
+  }
+}
+
+test('shebang: preserves executable permissions', async t => {
+  const { chmodSync, statSync } = await import('node:fs');
+  let file;
+  let originalMode;
+  const actual = runReport(t, '#!/usr/bin/env node\nconst unused = 1;\nconsole.log(42);\n', filePath => {
+    file = filePath;
+    chmodSync(file, 0o755);
+    originalMode = statSync(file).mode;
+    return [{ filePath, messages: [{ ruleId: 'no-unused-vars', line: 2, column: 7 }] }];
+  });
+  assert.equal(actual, '#!/usr/bin/env node\n\nconsole.log(42);\n');
+  assert.equal(statSync(file).mode, originalMode);
+});

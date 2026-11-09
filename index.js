@@ -416,6 +416,7 @@ function removeUnusedVariables(results) {
 
     if (positions.length > 0) {
       let output = source;
+      const shebangEnd = source.match(/^#![^\r\n\u2028\u2029]*(?:\r\n|[\r\n\u2028\u2029]|$)/)?.[0].length ?? 0;
       positions.sort((a, b) => {
         return b.end - a.end;
       });
@@ -424,7 +425,8 @@ function removeUnusedVariables(results) {
       for (const { start, end, replacement } of positions) {
         // skip covered positions
         if (end <= lastStart) {
-          output = output.slice(0, start) + (replacement ?? '') + output.slice(end);
+          // Keep the executable directive outside every removal range.
+          output = output.slice(0, Math.max(start, shebangEnd)) + (replacement ?? '') + output.slice(end);
           lastStart = start;
         }
       }
