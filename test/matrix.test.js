@@ -405,12 +405,11 @@ const fixtureMatrix = [
     output: 'output.ts',
   },
   {
-    name: 'import clauses: checks a namespace reference in a whole mixed range',
+    name: 'import clauses: removes a wholly unused namespace with a matching property name',
     dir: '/import-clauses/case-57',
     input: 'input.js',
     output: 'output.js',
-    // Biome groups default and namespace bindings; other linters can remove both independently.
-    only: ['biome'],
+    // Biome's whole-clause range confirms both bindings are unused despite the property name.
   },
   {
     name: 'import clauses: preserves exports, shorthand properties and typeof in a range',

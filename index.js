@@ -348,9 +348,16 @@ function removeUnusedVariables(results) {
                 }),
               ),
             );
-            // Biome ranges can include used bindings; even unrelated occurrences keep a binding.
+            // Biome covers the whole mixed clause only when every binding is unused.
+            const wholeMixedClause =
+              importClause.name &&
+              namedBindings &&
+              file.importRanges?.some(
+                range => range.start <= importClause.getStart(sourceFile) && range.end >= importClause.getEnd(),
+              );
+            // Partial ranges can include used bindings; even unrelated occurrences keep a binding.
             for (const binding of bindings) {
-              if (flagged.has(binding)) continue;
+              if (wholeMixedClause || flagged.has(binding)) continue;
               const inRange = file.importRanges?.some(
                 range => range.start <= binding.getStart(sourceFile) && range.end >= binding.getEnd(),
               );
@@ -362,7 +369,7 @@ function removeUnusedVariables(results) {
                 flagged.add(binding);
               }
             }
-            if (bindings.every(binding => flagged.has(binding))) {
+            if (wholeMixedClause || bindings.every(binding => flagged.has(binding))) {
               const nextToken = ts.findNextToken(importDeclaration, sourceFile);
               const end = nextToken ? nextToken.getFullStart() : source.length;
               return { start: importDeclaration.getFullStart(), end };
