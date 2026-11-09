@@ -293,8 +293,8 @@ function removeUnusedVariables(results) {
             const parameter = token.parent;
             const parent = parameter.parent;
             if (ts.isArrowFunction(parent) && parent.parameters.length === 1) {
-              const hasParens =
-                source.slice(parent.parameters[0].getFullStart() - 1, parent.parameters[0].getFullStart()) === '(';
+              // Only the arrow's own tokens can delimit its parameter list, not an enclosing call or wrapper.
+              const hasParens = parent.getChildren(sourceFile).some(child => child.kind === ts.SyntaxKind.OpenParenToken);
               if (!hasParens) {
                 return { start: parameter.getFullStart(), end: parameter.getEnd(), replacement: ' ()' };
               }

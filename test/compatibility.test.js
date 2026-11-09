@@ -120,6 +120,31 @@ for (const fixture of biomeLegacyImportCases) {
   });
 }
 
+// The matrix uses args: 'after-used', so ESLint does not report a leading parameter before a used one.
+for (const ruleId of ['no-unused-vars', '@typescript-eslint/no-unused-vars']) {
+  test(`${ruleId}: preserves a reported leading arrow parameter`, t => {
+    const source = 'export const kept = (unused, used) => used + 40;\n';
+    const actual = runReport(t, source, filePath => [
+      {
+        filePath,
+        source,
+        messages: [
+          {
+            ruleId,
+            line: 1,
+            column: 22,
+            suggestions:
+              ruleId === 'no-unused-vars'
+                ? [{ data: { varName: 'unused' }, fix: { range: [21, 28], text: '' } }]
+                : undefined,
+          },
+        ],
+      },
+    ]);
+    assert.equal(actual, 'export const kept = (unused, used) => used + 40;\n');
+  });
+}
+
 for (const [name, separator, start] of [
   ['LF', '\n', { line: 2, column: 7 }],
   ['CRLF', '\r\n', { line: 2, column: 7 }],
