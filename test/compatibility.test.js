@@ -75,6 +75,51 @@ for (const format of ['legacy', 'current']) {
   }
 }
 
+const biomeLegacyImportCases = [
+  {
+    name: 'an unused mixed import across CRLF',
+    source: '/* café 🎉 */ import unused, /* café 🎉 */\r\n * as namespace from "./values.mjs";\nconsole.log(0);\n',
+    span: [24, 65],
+    expected: '\nconsole.log(0);\n',
+  },
+  {
+    name: 'an unused named group after a used default',
+    source: '/* café 🎉 */ import kept, { unused } from "./values.mjs";\nconsole.log(kept);\n',
+    span: [30, 40],
+    expected: '/* café 🎉 */ import kept  from "./values.mjs";\nconsole.log(kept);\n',
+  },
+  {
+    name: 'an unused default before a used namespace',
+    source:
+      '/* café 🎉 */ import unused, /* café 🎉 */ * as namespace from "./values.mjs";\nconsole.log(namespace.kept);\n',
+    span: [24, 30],
+    expected:
+      '/* café 🎉 */ import  /* café 🎉 */ * as namespace from "./values.mjs";\nconsole.log(namespace.kept);\n',
+  },
+  {
+    name: 'a partial range removes only the binding at its start',
+    source:
+      '/* café 🎉 */ import unused, { unused as retiré, kept as gardé } from "./values.mjs";\nconsole.log(gardé);\n',
+    span: [24, 51],
+    expected:
+      '/* café 🎉 */ import  { unused as retiré, kept as gardé } from "./values.mjs";\nconsole.log(gardé);\n',
+  },
+];
+
+for (const fixture of biomeLegacyImportCases) {
+  test(`Biome legacy report: ${fixture.name}`, t => {
+    const actual = runReport(t, fixture.source, filePath => ({
+      diagnostics: [
+        {
+          category: 'lint/correctness/noUnusedImports',
+          location: { path: { file: filePath }, sourceCode: fixture.source, span: fixture.span },
+        },
+      ],
+    }));
+    assert.equal(actual, fixture.expected);
+  });
+}
+
 for (const [name, separator, start] of [
   ['LF', '\n', { line: 2, column: 7 }],
   ['CRLF', '\r\n', { line: 2, column: 7 }],
