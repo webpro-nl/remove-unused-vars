@@ -151,3 +151,39 @@ for (const [name, report] of [
     assert.equal(actual, 'export const kept = 1;\n');
   });
 }
+
+// The matrix's ESLint runners use args: 'after-used'; these reports also flag earlier unused parameters.
+const listSeparatorParameterCases = [
+  {
+    name: 'used later argument retains earlier unused argument',
+    source: 'function run(unused /* keep, comment */, kept,) { console.log(kept); } run(0, 42);',
+    columns: [14],
+    expected: 'function run(unused /* keep, comment */, kept,) { console.log(kept); } run(0, 42);',
+  },
+  {
+    name: 'used middle argument with both neighbors reported',
+    source: 'function run(unusedA, kept, unusedB /* keep, comment */,) { console.log(kept); } run(0, 42, 1);',
+    columns: [14, 29],
+    expected: 'function run(unusedA, kept, /* keep, comment */) { console.log(kept); } run(0, 42, 1);',
+  },
+  {
+    name: 'used rest parameter retains earlier unused argument',
+    source: 'function run(unused /* keep, comment */, ...kept) { console.log(kept[0]); } run(0, 42);',
+    columns: [14],
+    expected: 'function run(unused /* keep, comment */, ...kept) { console.log(kept[0]); } run(0, 42);',
+  },
+];
+
+for (const ruleId of ['no-unused-vars', '@typescript-eslint/no-unused-vars']) {
+  for (const fixture of listSeparatorParameterCases) {
+    test(`${ruleId} list separators: ${fixture.name}`, t => {
+      const actual = runReport(t, fixture.source, filePath => [
+        {
+          filePath,
+          messages: fixture.columns.map(column => ({ ruleId, line: 1, column })),
+        },
+      ]);
+      assert.equal(actual, fixture.expected);
+    });
+  }
+}
