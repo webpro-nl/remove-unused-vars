@@ -418,12 +418,28 @@ const fixtureMatrix = [
     output: 'output.js',
   },
   {
-    name: 'import clauses: preserves a JSX reference between unused bindings',
+    name: 'import clauses: keeps later bindings in a partial JSX range',
     dir: '/import-clauses/case-59',
     input: 'input.tsx',
     output: 'output.tsx',
-    // The ESLint fixture configuration only includes .js and .ts files.
-    only: ['biome', 'oxlint'],
+    // Only Biome groups partial ranges; JSX factories can use bindings implicitly.
+    only: ['biome'],
+  },
+  {
+    name: 'import clauses: preserves a JSX reference between individually reported unused bindings',
+    dir: '/import-clauses/case-59',
+    input: 'input.tsx',
+    output: 'output-oxlint.tsx',
+    // Oxlint reports each unused binding separately; keep its existing coverage.
+    only: ['oxlint'],
+  },
+  {
+    name: 'import clauses: preserves a binding referenced only in JSDoc',
+    dir: '/import-clauses/case-60',
+    input: 'input.js',
+    output: 'output.js',
+    // Other linters report the JSDoc-only binding as unused.
+    only: ['biome'],
   },
   { name: 'basic const', dir: '/const', input: 'input.js', output: 'output.js' },
   { name: 'basic function', dir: '/function', input: 'input.js', output: 'output.js' },

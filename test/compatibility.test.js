@@ -8,10 +8,10 @@ import { fileURLToPath } from 'node:url';
 
 const cli = fileURLToPath(new URL('../index.js', import.meta.url));
 
-function runReport(t, source, createReport) {
+function runReport(t, source, createReport, fileName = 'input.js') {
   const directory = mkdtempSync(path.join(tmpdir(), 'remove-unused-vars-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const filePath = path.join(directory, 'input.js');
+  const filePath = path.join(directory, fileName);
   writeFileSync(filePath, source);
   const result = spawnSync(process.execPath, [cli], {
     input: JSON.stringify(createReport(filePath)),
@@ -117,6 +117,119 @@ for (const fixture of biomeLegacyImportCases) {
       ],
     }));
     assert.equal(actual, fixture.expected);
+  });
+}
+
+test('import clauses: preserves the classic JSX factory in a current Biome partial range', t => {
+  const source = "import { useState, default as React, useEffect } from 'react';\nexport const view = <div />;\n";
+  const actual = runReport(
+    t,
+    source,
+    filePath => ({
+      diagnostics: [
+        {
+          category: 'lint/correctness/noUnusedImports',
+          location: { path: filePath, start: { line: 1, column: 10 }, end: { line: 1, column: 47 } },
+        },
+      ],
+    }),
+    'input.tsx',
+  );
+  assert.equal(actual, "import {  default as React, useEffect } from 'react';\nexport const view = <div />;\n");
+});
+
+for (const [name, body, fileName] of [
+  ['a JSX element', 'export const view = <div></div>;', 'input.jsx'],
+  ['a JSX fragment', 'export const view = <>text</>;', 'input.tsx'],
+  ['direct eval', 'export const result = kept + eval("Hidden");', 'input.js'],
+  ['parenthesized eval', 'export const result = kept + (eval)("Hidden");', 'input.js'],
+  ['dynamic eval', 'export const result = kept + eval("Hid" + "den");', 'input.js'],
+]) {
+  for (const format of ['legacy', 'current']) {
+    test(`import clauses: ${format} partial ranges keep possible implicit uses in ${name}`, t => {
+      const source = `import { unused, Hidden, kept, other } from './values.mjs';\n${body}\n`;
+      const actual = runReport(
+        t,
+        source,
+        filePath => ({
+          diagnostics: [
+            {
+              category: 'lint/correctness/noUnusedImports',
+              location:
+                format === 'legacy'
+                  ? { path: { file: filePath }, sourceCode: source, span: [9, 35] }
+                  : { path: filePath, start: { line: 1, column: 10 }, end: { line: 1, column: 36 } },
+            },
+          ],
+        }),
+        fileName,
+      );
+      assert.equal(actual, `import {  Hidden, kept, other } from './values.mjs';\n${body}\n`);
+    });
+  }
+}
+
+for (const [name, binding, body] of [
+  [
+    'decorator metadata',
+    'Reflect',
+    'function decorate(target) {}\n@decorate\nexport class Example {}\nexport const value = kept;',
+  ],
+  ['async helpers', 'Promise', 'export async function read() { return kept; }'],
+]) {
+  test(`import clauses: partial ranges preserve bindings used by ${name}`, t => {
+    const source = `import { unused, ${binding}, kept, other } from './values.mjs';\n${body}\n`;
+    const actual = runReport(
+      t,
+      source,
+      filePath => ({
+        diagnostics: [
+          {
+            category: 'lint/correctness/noUnusedImports',
+            location: { path: filePath, start: { line: 1, column: 10 }, end: { line: 1, column: 38 } },
+          },
+        ],
+      }),
+      'input.ts',
+    );
+    assert.equal(actual, `import {  ${binding}, kept, other } from './values.mjs';\n${body}\n`);
+  });
+}
+
+for (const [name, body] of [
+  ['a parameter type', '/** @param {Kept} value */\nexport function read(value) { return value.value; }'],
+  ['a variable type', '/** @type {Kept} */\nexport let value;'],
+  ['a documentation link', '/** See {@link Kept}. */\nexport const value = 1;'],
+]) {
+  test(`import clauses: partial ranges preserve JSDoc names in ${name}`, t => {
+    const source = `import { unused, Kept, other } from './values.mjs';\n${body}\n`;
+    const actual = runReport(t, source, filePath => ({
+      diagnostics: [
+        {
+          category: 'lint/correctness/noUnusedImports',
+          location: { path: filePath, start: { line: 1, column: 10 }, end: { line: 1, column: 29 } },
+        },
+      ],
+    }));
+    assert.equal(actual, `import {  Kept  } from './values.mjs';\n${body}\n`);
+  });
+}
+
+for (const [name, body] of [
+  ['JSX', 'export const view = <div />;'],
+  ['eval', 'export const result = eval("1 + 1");'],
+]) {
+  test(`import clauses: whole-clause ranges still remove unused imports with ${name}`, t => {
+    const source = `import unused, { other } from './values.mjs';\n${body}\n`;
+    const actual = runReport(t, source, filePath => ({
+      diagnostics: [
+        {
+          category: 'lint/correctness/noUnusedImports',
+          location: { path: filePath, start: { line: 1, column: 8 }, end: { line: 1, column: 25 } },
+        },
+      ],
+    }));
+    assert.equal(actual, `\n${body}\n`);
   });
 }
 

@@ -1,2 +1,2 @@
-import {  Component  } from './values.mjs';
+import {  Component, other } from './values.mjs';
 export const view = <Component />;

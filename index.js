@@ -196,9 +196,24 @@ function hasMatchingIdentifier(name, sourceFile, predicate) {
     if (found) return;
     if (ts.isIdentifier(node) && node.text === name && predicate(node)) found = true;
     else ts.forEachChild(node, visit);
+    node.jsDoc?.forEach(visit);
   };
   visit(sourceFile);
   return found;
+}
+
+function hasImplicitReferences(node) {
+  return (
+    ts.isJsxElement(node) ||
+    ts.isJsxSelfClosingElement(node) ||
+    ts.isJsxFragment(node) ||
+    // Downlevel helpers can reference imported globals such as Reflect or Promise.
+    ts.isDecorator(node) ||
+    node.kind === ts.SyntaxKind.AsyncKeyword ||
+    // Any eval identifier may be a direct call, including parenthesized calls.
+    (ts.isIdentifier(node) && node.text === 'eval') ||
+    ts.forEachChild(node, hasImplicitReferences)
+  );
 }
 
 function getPos(sourceFile, pos) {
@@ -232,6 +247,7 @@ function removeUnusedVariables(results) {
 
     const source = file.source ?? readFileSync(file.filePath, 'utf-8');
     const sourceFile = ts.createSourceFile(file.filePath, source, ts.ScriptTarget.Latest, true);
+    const hasImplicitUsage = hasImplicitReferences(sourceFile);
 
     const processedImports = new Set();
     const processedBindings = new Set();
@@ -356,8 +372,9 @@ function removeUnusedVariables(results) {
                 range => range.start <= importClause.getStart(sourceFile) && range.end >= importClause.getEnd(),
               );
             // Partial ranges can include used bindings; even unrelated occurrences keep a binding.
+            // JSX factories, downlevel helpers and direct eval can use bindings implicitly.
             for (const binding of bindings) {
-              if (wholeMixedClause || flagged.has(binding)) continue;
+              if (wholeMixedClause || hasImplicitUsage || flagged.has(binding)) continue;
               const inRange = file.importRanges?.some(
                 range => range.start <= binding.getStart(sourceFile) && range.end >= binding.getEnd(),
               );
