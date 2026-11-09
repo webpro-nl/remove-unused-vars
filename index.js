@@ -190,15 +190,15 @@ function isDeclarationName(token, node) {
     : node.name === token;
 }
 
-function isReassigned(name, sourceFile) {
-  let reassigned = false;
+function hasMatchingIdentifier(name, sourceFile, predicate) {
+  let found = false;
   const visit = node => {
-    if (reassigned) return;
-    if (ts.isIdentifier(node) && node.text === name && isWriteTarget(node)) reassigned = true;
+    if (found) return;
+    if (ts.isIdentifier(node) && node.text === name && predicate(node)) found = true;
     else ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-  return reassigned;
+  return found;
 }
 
 function getPos(sourceFile, pos) {
@@ -348,15 +348,21 @@ function removeUnusedVariables(results) {
                 }),
               ),
             );
-            // Biome can report all mixed bindings with one range starting at the default.
-            // A partial range must never imply that the remaining bindings are unused.
-            const wholeMixedClause =
-              importClause.name &&
-              namedBindings &&
-              file.importRanges?.some(
-                range => range.start <= importClause.getStart(sourceFile) && range.end >= importClause.getEnd(),
+            // Biome ranges can include used bindings; even unrelated occurrences keep a binding.
+            for (const binding of bindings) {
+              if (flagged.has(binding)) continue;
+              const inRange = file.importRanges?.some(
+                range => range.start <= binding.getStart(sourceFile) && range.end >= binding.getEnd(),
               );
-            if (wholeMixedClause || bindings.every(binding => flagged.has(binding))) {
+              const name = ts.isIdentifier(binding) ? binding.text : binding.name.text;
+              if (
+                inRange &&
+                !hasMatchingIdentifier(name, sourceFile, node => node !== binding && node.parent !== binding)
+              ) {
+                flagged.add(binding);
+              }
+            }
+            if (bindings.every(binding => flagged.has(binding))) {
               const nextToken = ts.findNextToken(importDeclaration, sourceFile);
               const end = nextToken ? nextToken.getFullStart() : source.length;
               return { start: importDeclaration.getFullStart(), end };
@@ -408,7 +414,9 @@ function removeUnusedVariables(results) {
 
         if (!node) return null;
 
-        if (!isDeclarationName(token, node) || isReassigned(token.text, sourceFile)) return null;
+        if (!isDeclarationName(token, node) || hasMatchingIdentifier(token.text, sourceFile, isWriteTarget)) {
+          return null;
+        }
 
         return { start: node.getFullStart(), end: node.getEnd() };
       })

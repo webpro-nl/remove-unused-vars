@@ -97,12 +97,12 @@ const biomeLegacyImportCases = [
       '/* café 🎉 */ import  /* café 🎉 */ * as namespace from "./values.mjs";\nconsole.log(namespace.kept);\n',
   },
   {
-    name: 'a partial range removes only the binding at its start',
+    name: 'a partial range removes unreferenced bindings and preserves a used alias',
     source:
       '/* café 🎉 */ import unused, { unused as retiré, kept as gardé } from "./values.mjs";\nconsole.log(gardé);\n',
     span: [24, 51],
     expected:
-      '/* café 🎉 */ import  { unused as retiré, kept as gardé } from "./values.mjs";\nconsole.log(gardé);\n',
+      '/* café 🎉 */ import  {  kept as gardé } from "./values.mjs";\nconsole.log(gardé);\n',
   },
 ];
 
