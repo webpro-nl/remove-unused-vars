@@ -128,7 +128,9 @@ function transformOxlint(input) {
 }
 
 function transformEslint(input) {
-  const predicate = msg => msg.ruleId === 'no-unused-vars' || msg.ruleId === '@typescript-eslint/no-unused-vars';
+  const predicate = msg =>
+    (msg.ruleId === 'no-unused-vars' || msg.ruleId === '@typescript-eslint/no-unused-vars') &&
+    msg.messageId !== 'usedIgnoredVar';
   return input
     .filter(result => result.messages.some(predicate))
     .map(result => {
