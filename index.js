@@ -285,7 +285,10 @@ function removeUnusedVariables(results) {
 
             const start = bindingElement.getFullStart();
             let end = bindingElement.getEnd();
-            if (bindingElement !== bindingPattern.elements.at(-1)) end = source.indexOf(',', end) + 1;
+            // Keep array slots as holes so later bindings and rest elements retain their positions.
+            if (!ts.isArrayBindingPattern(bindingPattern) && bindingElement !== bindingPattern.elements.at(-1)) {
+              end = source.indexOf(',', end) + 1;
+            }
             return { start, end };
           }
 
