@@ -75,6 +75,79 @@ for (const format of ['legacy', 'current']) {
   }
 }
 
+// The matrix does not enable reportUsedIgnorePattern, which reports used bindings as usedIgnoredVar.
+for (const typed of [false, true]) {
+  const ruleId = typed ? '@typescript-eslint/no-unused-vars' : 'no-unused-vars';
+  const annotation = typed ? ': number' : '';
+  const ignoredBindingCases = [
+    {
+      name: 'used ignored variable',
+      source: 'const _used = 42;\nconsole.log(_used);\n',
+      expected: 'const _used = 42;\nconsole.log(_used);\n',
+      messages: [{ messageId: 'usedIgnoredVar', line: 1, column: 7 }],
+    },
+    {
+      name: 'used ignored parameter',
+      source: `function answer(_used${annotation}) { return _used; }\nconsole.log(answer(42));\n`,
+      expected: `function answer(_used${annotation}) { return _used; }\nconsole.log(answer(42));\n`,
+      messages: [{ messageId: 'usedIgnoredVar', line: 1, column: 17 }],
+    },
+    {
+      name: 'used ignored catch binding',
+      source: 'try { throw 42; } catch (_used) { console.log(_used); }\n',
+      expected: 'try { throw 42; } catch (_used) { console.log(_used); }\n',
+      messages: [{ messageId: 'usedIgnoredVar', line: 1, column: 26 }],
+    },
+    {
+      name: 'used ignored array binding',
+      source: 'const [_used] = [42];\nconsole.log(_used);\n',
+      expected: 'const [_used] = [42];\nconsole.log(_used);\n',
+      messages: [{ messageId: 'usedIgnoredVar', line: 1, column: 8 }],
+    },
+    {
+      name: 'used ignored variable alongside an unused variable',
+      source: 'const _used = 42;\nconst unused = 0;\nconsole.log(_used);\n',
+      expected: 'const _used = 42;\nconsole.log(_used);\n',
+      messages: [
+        { messageId: 'usedIgnoredVar', line: 1, column: 7 },
+        {
+          messageId: 'unusedVar',
+          line: 2,
+          column: 7,
+          suggestions: typed ? undefined : [{ data: { varName: 'unused' }, fix: { range: [18, 35], text: '' } }],
+        },
+      ],
+    },
+    {
+      name: 'used ignored parameter alongside an unused parameter',
+      source: `function answer(_used${annotation}, unused${annotation}) { return _used; }\nconsole.log(answer(42));\n`,
+      expected: `function answer(_used${annotation},) { return _used; }\nconsole.log(answer(42));\n`,
+      messages: [
+        { messageId: 'usedIgnoredVar', line: 1, column: 17 },
+        {
+          messageId: 'unusedVar',
+          line: 1,
+          column: typed ? 32 : 24,
+          suggestions: typed ? undefined : [{ data: { varName: 'unused' }, fix: { range: [21, 29], text: '' } }],
+        },
+      ],
+    },
+  ];
+
+  for (const fixture of ignoredBindingCases) {
+    test(`${ruleId}: ${fixture.name}`, t => {
+      const actual = runReport(t, fixture.source, filePath => [
+        {
+          filePath,
+          source: fixture.source,
+          messages: fixture.messages.map(message => ({ ...message, ruleId })),
+        },
+      ]);
+      assert.equal(actual, fixture.expected);
+    });
+  }
+}
+
 const biomeLegacyImportCases = [
   {
     name: 'an unused mixed import across CRLF',
