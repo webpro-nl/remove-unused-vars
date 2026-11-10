@@ -88,14 +88,27 @@ function transformBiome(input) {
         output[filePath] = {
           filePath,
           positions: [],
+          importRanges: [],
           source,
           toChar: location.start ? createLineColumnToCharConverter(source) : createByteToCharConverter(source),
         };
       }
       output[filePath].positions.push(output[filePath].toChar(location.start ?? location.span[0]));
+      const end = location.end ?? location.span?.[1];
+      if (diagnostic.category === 'lint/correctness/noUnusedImports' && end !== undefined) {
+        output[filePath].importRanges.push({
+          start: output[filePath].positions.at(-1),
+          end: output[filePath].toChar(end),
+        });
+      }
       return output;
     }, {});
-  return Object.values(groupedByFile).map(({ filePath, positions, source }) => ({ filePath, positions, source }));
+  return Object.values(groupedByFile).map(({ filePath, positions, importRanges, source }) => ({
+    filePath,
+    positions,
+    importRanges,
+    source,
+  }));
 }
 
 function transformOxlint(input) {
@@ -206,6 +219,7 @@ function getListElementRemoval(node, sourceFile) {
  * @typedef {Object} Results
  * @property {string} filePath
  * @property {(number | [number, number])[]} positions
+ * @property {{start: number, end: number}[]} [importRanges]
  * @property {string?} source
  */
 
@@ -311,51 +325,92 @@ function removeUnusedVariables(results) {
             return getListElementRemoval(parameter, sourceFile);
           }
 
-          if (ts.isImportClause(token.parent)) {
-            const importDecl = token.parent.parent;
-            const nextToken = ts.findNextToken(importDecl, sourceFile);
-            const end = nextToken ? nextToken.getFullStart() : source.length;
-            return { start: importDecl.getFullStart(), end };
-          }
-
-          if (ts.isImportSpecifier(token.parent)) {
-            const importSpecifier = token.parent;
-            const importClause = importSpecifier.parent.parent;
+          if (
+            ts.isImportClause(token.parent) ||
+            ts.isImportSpecifier(token.parent) ||
+            ts.isNamespaceImport(token.parent) ||
+            (ts.isNamedImports(token.parent) && token.kind === ts.SyntaxKind.OpenBraceToken)
+          ) {
+            const importClause = ts.isImportClause(token.parent)
+              ? token.parent
+              : ts.isImportSpecifier(token.parent)
+                ? token.parent.parent.parent
+                : token.parent.parent;
             const importDeclaration = importClause.parent;
+            if (processedImports.has(importDeclaration.pos)) return null;
+            processedImports.add(importDeclaration.pos);
+
             const namedBindings = importClause.namedBindings;
-            if (!namedBindings?.elements) return null;
-            const elements = namedBindings.elements;
-            const allElementsRemoved = elements.every(element =>
-              file.positions.some(p => {
-                const pos = getPos(sourceFile, p);
-                const token = ts.getTokenAtPosition(sourceFile, pos);
-                return token.parent === element;
-              }),
+            const elements = namedBindings && ts.isNamedImports(namedBindings) ? namedBindings.elements : [];
+            const bindings = [
+              ...(importClause.name ? [importClause.name] : []),
+              ...(namedBindings && ts.isNamespaceImport(namedBindings) ? [namedBindings] : elements),
+            ];
+            const flagged = new Set(
+              bindings.filter(binding =>
+                file.positions.some(p => {
+                  const token = ts.getTokenAtPosition(sourceFile, getPos(sourceFile, p));
+                  return (
+                    token === binding ||
+                    token.parent === binding ||
+                    (ts.isNamedImports(token.parent) &&
+                      token.kind === ts.SyntaxKind.OpenBraceToken &&
+                      binding.parent === token.parent)
+                  );
+                }),
+              ),
             );
-            if (allElementsRemoved) {
-              if (processedImports.has(importDeclaration.pos)) return null;
-              processedImports.add(importDeclaration.pos);
+            // Biome can report all mixed bindings with one range starting at the default.
+            // A partial range must never imply that the remaining bindings are unused.
+            const wholeMixedClause =
+              importClause.name &&
+              namedBindings &&
+              file.importRanges?.some(
+                range => range.start <= importClause.getStart(sourceFile) && range.end >= importClause.getEnd(),
+              );
+            if (wholeMixedClause || bindings.every(binding => flagged.has(binding))) {
               const nextToken = ts.findNextToken(importDeclaration, sourceFile);
               const end = nextToken ? nextToken.getFullStart() : source.length;
               return { start: importDeclaration.getFullStart(), end };
             }
-            let start = importSpecifier.getFullStart();
-            let end = importSpecifier.getEnd();
-            if (importSpecifier === elements[0]) {
-              const nextElement = elements[1];
-              end = nextElement.getFullStart();
-            } else {
-              start = source.lastIndexOf(',', start);
-            }
-            return { start, end };
-          }
 
-          if (ts.isNamespaceImport(token.parent)) {
-            const namespaceImport = token.parent;
-            const importDecl = namespaceImport.parent.parent;
-            const nextToken = ts.findNextToken(importDecl, sourceFile);
-            const end = nextToken ? nextToken.getFullStart() : source.length;
-            return { start: importDecl.getFullStart(), end };
+            // Plan the whole clause once: several diagnostics may share its separators.
+            const removed = [];
+            if (flagged.has(importClause.name)) removed.push(importClause.name);
+            const removeNamedBindings =
+              namedBindings &&
+              (ts.isNamespaceImport(namedBindings)
+                ? flagged.has(namedBindings)
+                : elements.length > 0 && elements.every(element => flagged.has(element)));
+            if (removeNamedBindings) removed.push(namedBindings);
+            if (importClause.name && namedBindings && (flagged.has(importClause.name) || removeNamedBindings)) {
+              removed.push(ts.findNextToken(importClause.name, sourceFile));
+            }
+            if (elements.length > 0 && !removeNamedBindings) {
+              const kept = elements.filter(element => !flagged.has(element));
+              const commas = namedBindings
+                .getChildren(sourceFile)
+                .flatMap(child => child.getChildren(sourceFile))
+                .filter(child => child.kind === ts.SyntaxKind.CommaToken);
+              for (let i = 0; i < elements.length; i++) {
+                if (flagged.has(elements[i])) removed.push(elements[i]);
+                if (
+                  commas[i] &&
+                  (flagged.has(elements[i]) || (elements[i] === kept.at(-1) && !elements.hasTrailingComma))
+                ) {
+                  removed.push(commas[i]);
+                }
+              }
+            }
+            const start = importClause.getStart(sourceFile);
+            const end = importClause.getEnd();
+            let replacement = source.slice(start, end);
+            for (const node of removed.sort((a, b) => b.getEnd() - a.getEnd())) {
+              replacement =
+                replacement.slice(0, node.getStart(sourceFile) - start) + replacement.slice(node.getEnd() - start);
+            }
+            if (removeNamedBindings && importClause.name && source.startsWith('from', end)) replacement += ' ';
+            return { start, end, replacement };
           }
 
           if (ts.isImportDeclaration(token.parent)) return null;
