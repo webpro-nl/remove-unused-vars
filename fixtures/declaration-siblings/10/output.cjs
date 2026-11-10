@@ -1,0 +1,4 @@
+;
+"use strict";
+with({}){}
+console.log(42);

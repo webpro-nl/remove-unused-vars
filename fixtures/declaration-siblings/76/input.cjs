@@ -1,0 +1,1 @@
+globalThis.marker=42; with ({marker:7}) var msg="msg"; console.log(marker);

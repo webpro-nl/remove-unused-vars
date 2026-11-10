@@ -1,0 +1,2 @@
+# Preserve the bytes exercised by the CRLF diagnostic-location fixture.
+fixtures/diagnostic-binding-location/12/*.js -text

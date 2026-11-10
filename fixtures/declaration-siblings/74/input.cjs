@@ -1,0 +1,1 @@
+(()=>{function msg(){return "msg";} function other(){} "use strict"; with({}){console.log(42);}})();
