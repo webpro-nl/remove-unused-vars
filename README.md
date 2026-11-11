@@ -4,16 +4,20 @@ Remove more unused variables. Highly experimental.
 
 > [!WARNING]
 >
-> There's a reason linters don't fix the unused variables, even with a flag like `--unsafe` or `--fix-dangerously`.
+> There's a reason linters don't always remove unused variables, even with a flag like `--unsafe` or `--fix-dangerously`.
 
 Modern linters can fix a lot of issues automatically, but don't always remove all unused variables and types. Even when
 using `--unsafe` or `--fix-dangerously`.
+
+Biome and Oxlint can also fix unused-variable warnings by renaming bindings with an `_` prefix. This leaves the code
+in place, and those bindings may no longer appear in subsequent lint reports. To remove them, run `remove-unused-vars`
+before applying fixes that rename unused bindings.
 
 Use `remove-unused-vars` to remove everything the linter finds. Then run QA and review if there's anything that might
 need reverting. Needless to say, Git's your friend here!
 
 Don't use e.g. `eslint --fix` or `biome lint --write` when piping to `remove-unused-vars`, otherwise the positions to
-remove things might not match up. Use the linter first to have it remove whatever it can, then proceed with the
+remove things might not match up. Run other linter fixes separately, then generate a fresh JSON report with the
 command(s) below.
 
 > [!TIP]
