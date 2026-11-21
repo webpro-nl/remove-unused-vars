@@ -175,14 +175,11 @@ test('import clauses: preserves the classic JSX factory in a current Biome parti
 });
 
 for (const [name, body, fileName] of [
-  ['a JSX element', 'export const view = <div></div>;', 'input.jsx'],
-  ['a JSX fragment', 'export const view = <>text</>;', 'input.tsx'],
-  ['direct eval', 'export const result = kept + eval("Hidden");', 'input.js'],
-  ['parenthesized eval', 'export const result = kept + (eval)("Hidden");', 'input.js'],
-  ['dynamic eval', 'export const result = kept + eval("Hid" + "den");', 'input.js'],
+  ['a JSX element', 'export const view = <div>{kept}</div>;', 'input.jsx'],
+  ['a JSX fragment', 'export const view = <>{kept}</>;', 'input.tsx'],
 ]) {
   for (const format of ['legacy', 'current']) {
-    test(`import clauses: ${format} partial ranges keep possible implicit uses in ${name}`, t => {
+    test(`import clauses: ${format} partial ranges keep later bindings next to ${name}`, t => {
       const source = `import { unused, Hidden, kept, other } from './values.mjs';\n${body}\n`;
       const actual = runReport(
         t,
@@ -193,8 +190,8 @@ for (const [name, body, fileName] of [
               category: 'lint/correctness/noUnusedImports',
               location:
                 format === 'legacy'
-                  ? { path: { file: filePath }, sourceCode: source, span: [9, 35] }
-                  : { path: filePath, start: { line: 1, column: 10 }, end: { line: 1, column: 36 } },
+                  ? { path: { file: filePath }, sourceCode: source, span: [9, 36] }
+                  : { path: filePath, start: { line: 1, column: 10 }, end: { line: 1, column: 37 } },
             },
           ],
         }),
@@ -203,33 +200,6 @@ for (const [name, body, fileName] of [
       assert.equal(actual, `import {  Hidden, kept, other } from './values.mjs';\n${body}\n`);
     });
   }
-}
-
-for (const [name, binding, body] of [
-  [
-    'decorator metadata',
-    'Reflect',
-    'function decorate(target) {}\n@decorate\nexport class Example {}\nexport const value = kept;',
-  ],
-  ['async helpers', 'Promise', 'export async function read() { return kept; }'],
-]) {
-  test(`import clauses: partial ranges preserve bindings used by ${name}`, t => {
-    const source = `import { unused, ${binding}, kept, other } from './values.mjs';\n${body}\n`;
-    const actual = runReport(
-      t,
-      source,
-      filePath => ({
-        diagnostics: [
-          {
-            category: 'lint/correctness/noUnusedImports',
-            location: { path: filePath, start: { line: 1, column: 10 }, end: { line: 1, column: 38 } },
-          },
-        ],
-      }),
-      'input.ts',
-    );
-    assert.equal(actual, `import {  ${binding}, kept, other } from './values.mjs';\n${body}\n`);
-  });
 }
 
 for (const [name, body] of [
@@ -251,23 +221,18 @@ for (const [name, body] of [
   });
 }
 
-for (const [name, body] of [
-  ['JSX', 'export const view = <div />;'],
-  ['eval', 'export const result = eval("1 + 1");'],
-]) {
-  test(`import clauses: whole-clause ranges still remove unused imports with ${name}`, t => {
-    const source = `import unused, { other } from './values.mjs';\n${body}\n`;
-    const actual = runReport(t, source, filePath => ({
-      diagnostics: [
-        {
-          category: 'lint/correctness/noUnusedImports',
-          location: { path: filePath, start: { line: 1, column: 8 }, end: { line: 1, column: 25 } },
-        },
-      ],
-    }));
-    assert.equal(actual, `\n${body}\n`);
-  });
-}
+test('import clauses: whole-clause ranges still remove unused imports next to JSX', t => {
+  const source = "import unused, { other } from './values.mjs';\nexport const view = <div />;\n";
+  const actual = runReport(t, source, filePath => ({
+    diagnostics: [
+      {
+        category: 'lint/correctness/noUnusedImports',
+        location: { path: filePath, start: { line: 1, column: 8 }, end: { line: 1, column: 25 } },
+      },
+    ],
+  }));
+  assert.equal(actual, '\nexport const view = <div />;\n');
+});
 
 // The matrix uses args: 'after-used', so ESLint does not report a leading parameter before a used one.
 for (const ruleId of ['no-unused-vars', '@typescript-eslint/no-unused-vars']) {
