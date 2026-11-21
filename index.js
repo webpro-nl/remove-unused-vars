@@ -175,6 +175,20 @@ function findParentDeclaration(node) {
   return node;
 }
 
+function getDeclarationRemoval(node) {
+  const parent = node.parent;
+  const needsBody =
+    ts.isIfStatement(parent) ||
+    ts.isIterationStatement(parent, false) ||
+    ts.isLabeledStatement(parent) ||
+    ts.isWithStatement(parent);
+  return {
+    start: node.getFullStart(),
+    end: node.getEnd(),
+    replacement: needsBody ? ';' : '',
+  };
+}
+
 function isWriteTarget(id) {
   const parent = id.parent;
   if ((ts.isPostfixUnaryExpression(parent) || ts.isPrefixUnaryExpression(parent)) && parent.operand === id) {
@@ -305,7 +319,7 @@ function removeUnusedVariables(results) {
                   if (ts.isVariableStatement(variableStatement)) {
                     if (processedBindings.has(variableStatement.pos)) return null;
                     processedBindings.add(variableStatement.pos);
-                    return { start: variableStatement.getFullStart(), end: variableStatement.getEnd() };
+                    return getDeclarationRemoval(variableStatement);
                   }
                 }
               }
@@ -435,7 +449,7 @@ function removeUnusedVariables(results) {
 
         if (!isDeclarationName(token, node) || isReassigned(token.text, sourceFile)) return null;
 
-        return { start: node.getFullStart(), end: node.getEnd() };
+        return getDeclarationRemoval(node);
       })
       .filter(Boolean);
 
