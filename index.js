@@ -54,7 +54,8 @@ removeUnusedVariables(unifiedResults);
 
 function detect(json) {
   if (json.diagnostics && Array.isArray(json.diagnostics)) {
-    return json.diagnostics[0]?.code?.startsWith('eslint') ? Format.OXLINT : Format.BIOME;
+    // Parser errors have no code, so inspect later diagnostics too.
+    return json.diagnostics.some(diagnostic => diagnostic.code?.startsWith('eslint')) ? Format.OXLINT : Format.BIOME;
   }
   return Format.ESLINT;
 }
@@ -174,13 +175,27 @@ function findParentDeclaration(node) {
 
 function isWriteTarget(id) {
   const parent = id.parent;
-  if (ts.isBinaryExpression(parent) && parent.left === id && ts.isAssignmentOperator(parent.operatorToken.kind)) {
-    return true;
-  }
   if ((ts.isPostfixUnaryExpression(parent) || ts.isPrefixUnaryExpression(parent)) && parent.operand === id) {
     return parent.operator === ts.SyntaxKind.PlusPlusToken || parent.operator === ts.SyntaxKind.MinusMinusToken;
   }
-  return false;
+  // Climb out of destructuring patterns, e.g. `[id] = …`, `({ key: id } = …)`, `for ([id] of …)`
+  let target = id;
+  while (
+    ts.isParenthesizedExpression(target.parent) ||
+    ts.isArrayLiteralExpression(target.parent) ||
+    ts.isObjectLiteralExpression(target.parent) ||
+    ts.isSpreadElement(target.parent) ||
+    ts.isSpreadAssignment(target.parent) ||
+    (ts.isShorthandPropertyAssignment(target.parent) && target.parent.name === target) ||
+    (ts.isPropertyAssignment(target.parent) && target.parent.initializer === target)
+  ) {
+    target = target.parent;
+  }
+  const container = target.parent;
+  if (ts.isBinaryExpression(container) && container.left === target) {
+    return ts.isAssignmentOperator(container.operatorToken.kind);
+  }
+  return (ts.isForOfStatement(container) || ts.isForInStatement(container)) && container.initializer === target;
 }
 
 function isDeclarationName(token, node) {
@@ -228,6 +243,17 @@ function areAllParametersFlagged(parameters, positions, sourceFile) {
       return tokenAtPosition.parent === paramNode;
     });
   });
+}
+
+function getListElementRemoval(node, sourceFile) {
+  const start = node.getFullStart();
+  const end = node.getEnd();
+  const nextToken = ts.findNextToken(node, sourceFile);
+  if (nextToken?.kind === ts.SyntaxKind.CommaToken) {
+    // Include a trailing comma, but preserve comments between the element and its separator.
+    return { start, end: nextToken.getEnd(), replacement: sourceFile.text.slice(end, nextToken.getStart(sourceFile)) };
+  }
+  return { start, end };
 }
 
 /**
@@ -299,18 +325,18 @@ function removeUnusedVariables(results) {
               }
             }
 
-            const start = bindingElement.getFullStart();
-            let end = bindingElement.getEnd();
-            if (bindingElement !== bindingPattern.elements.at(-1)) end = source.indexOf(',', end) + 1;
-            return { start, end };
+            if (ts.isObjectBindingPattern(bindingPattern)) return getListElementRemoval(bindingElement, sourceFile);
+
+            // Keep array slots as holes so later bindings and rest elements retain their positions.
+            return { start: bindingElement.getFullStart(), end: bindingElement.getEnd() };
           }
 
           if (ts.isParameter(token.parent)) {
             const parameter = token.parent;
             const parent = parameter.parent;
             if (ts.isArrowFunction(parent) && parent.parameters.length === 1) {
-              const hasParens =
-                source.slice(parent.parameters[0].getFullStart() - 1, parent.parameters[0].getFullStart()) === '(';
+              // Only the arrow's own tokens can delimit its parameter list, not an enclosing call or wrapper.
+              const hasParens = parent.getChildren(sourceFile).some(child => child.kind === ts.SyntaxKind.OpenParenToken);
               if (!hasParens) {
                 return { start: parameter.getFullStart(), end: parameter.getEnd(), replacement: ' ()' };
               }
@@ -323,10 +349,7 @@ function removeUnusedVariables(results) {
               if (!areAllParametersFlagged(parameters, file.positions, sourceFile)) return null;
             }
 
-            const start = parameter.getFullStart();
-            let end = parameter.getEnd();
-            if (!isLastParameter) end = source.indexOf(',', end) + 1;
-            return { start, end };
+            return getListElementRemoval(parameter, sourceFile);
           }
 
           if (
@@ -448,6 +471,7 @@ function removeUnusedVariables(results) {
 
     if (positions.length > 0) {
       let output = source;
+      const shebangEnd = source.match(/^#![^\r\n\u2028\u2029]*(?:\r\n|[\r\n\u2028\u2029]|$)/)?.[0].length ?? 0;
       positions.sort((a, b) => {
         return b.end - a.end;
       });
@@ -456,7 +480,8 @@ function removeUnusedVariables(results) {
       for (const { start, end, replacement } of positions) {
         // skip covered positions
         if (end <= lastStart) {
-          output = output.slice(0, start) + (replacement ?? '') + output.slice(end);
+          // Keep the executable directive outside every removal range.
+          output = output.slice(0, Math.max(start, shebangEnd)) + (replacement ?? '') + output.slice(end);
           lastStart = start;
         }
       }
