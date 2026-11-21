@@ -451,14 +451,6 @@ const fixtureMatrix = [
     output: 'output.js',
   },
   {
-    name: 'list separators: object used rest binding',
-    dir: '/list-separators/case-7',
-    input: 'input.js',
-    output: 'output.js',
-    // Biome does not report unused siblings of a rest binding.
-    skip: ['biome'],
-  },
-  {
     name: 'list separators: object computed key and initializer commas',
     dir: '/list-separators/case-8',
     input: 'input.js',
