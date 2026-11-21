@@ -297,10 +297,8 @@ function removeUnusedVariables(results) {
 
             if (ts.isObjectBindingPattern(bindingPattern)) return getListElementRemoval(bindingElement, sourceFile);
 
-            const start = bindingElement.getFullStart();
-            let end = bindingElement.getEnd();
-            if (bindingElement !== bindingPattern.elements.at(-1)) end = source.indexOf(',', end) + 1;
-            return { start, end };
+            // Keep array slots as holes so later bindings and rest elements retain their positions.
+            return { start: bindingElement.getFullStart(), end: bindingElement.getEnd() };
           }
 
           if (ts.isParameter(token.parent)) {
