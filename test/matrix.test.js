@@ -4,10 +4,6 @@ import { execSync } from 'node:child_process';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { transformFixture } from './fixture-helpers.js';
-
-const declarationFixtures = JSON.parse(fs.readFileSync(new URL('./declaration-fixtures.json', import.meta.url)));
-
 const fixturesDir = path.join(path.resolve(), 'fixtures');
 
 const normalizeWhitespace = text => {
@@ -62,7 +58,664 @@ const lintRunners = {
 };
 
 const fixtureMatrix = [
-  ...declarationFixtures,
+  {
+    name: 'declarations: executable shebang before variable',
+    dir: '/diagnostic-binding-location/01',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: executable shebang before function',
+    dir: '/diagnostic-binding-location/02',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: BOM before compact first-line import',
+    dir: '/diagnostic-binding-location/03',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: BOM before an earlier line',
+    dir: '/diagnostic-binding-location/04',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: Unicode line separator 2028',
+    dir: '/diagnostic-binding-location/05',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: Unicode line separator 2029',
+    dir: '/diagnostic-binding-location/06',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: same-name literal',
+    dir: '/diagnostic-binding-location/07',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: literal substring',
+    dir: '/diagnostic-binding-location/08',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  { name: 'declarations: property', dir: '/diagnostic-binding-location/09', input: 'input.js', output: 'output.js' },
+  { name: 'declarations: comment', dir: '/diagnostic-binding-location/10', input: 'input.js', output: 'output.js' },
+  {
+    name: 'declarations: identifier substring',
+    dir: '/diagnostic-binding-location/11',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: Unicode and CRLF before binding',
+    dir: '/diagnostic-binding-location/12',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: object destructuring default',
+    dir: '/diagnostic-binding-location/13',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: binding safety: object separator after a comment',
+    dir: '/diagnostic-binding-location/14',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: binding safety: property excluded from a used object rest',
+    dir: '/diagnostic-binding-location/15',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: binding safety: unused object rest control',
+    dir: '/diagnostic-binding-location/16',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: binding safety: both property and rest are unused',
+    dir: '/diagnostic-binding-location/17',
+    input: 'input.js',
+    output: 'output.js',
+    skip: ['biome'],
+  },
+  {
+    name: 'declarations: binding safety: parameter separator after a comment',
+    dir: '/diagnostic-binding-location/18',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: renamed object binding',
+    dir: '/diagnostic-binding-location/19',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: leading array slot with same-name property in default',
+    dir: '/diagnostic-binding-location/20',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: middle array slot with same-name property in default',
+    dir: '/diagnostic-binding-location/21',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: array slot before a used rest binding',
+    dir: '/diagnostic-binding-location/22',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: trailing array binding',
+    dir: '/diagnostic-binding-location/23',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: parameter default',
+    dir: '/diagnostic-binding-location/24',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: catch binding',
+    dir: '/diagnostic-binding-location/25',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: write-only assignment without suggestion',
+    dir: '/diagnostic-binding-location/26',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: write-only increment',
+    dir: '/diagnostic-binding-location/27',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: leading parameter policy',
+    dir: '/diagnostic-binding-location/28',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: typed literal without suggestion',
+    dir: '/diagnostic-binding-location/29',
+    input: 'input.ts',
+    output: 'output.ts',
+  },
+  {
+    name: 'declarations: statement boundary: removed import before declaration',
+    dir: '/declaration-siblings/01',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: statement boundary: removed function before directive',
+    dir: '/declaration-siblings/02',
+    input: 'input.cjs',
+    output: 'output.cjs',
+  },
+  {
+    name: 'declarations: statement boundary: removed class before directive',
+    dir: '/declaration-siblings/03',
+    input: 'input.cjs',
+    output: 'output.cjs',
+  },
+  {
+    name: 'declarations: statement boundary: surviving function remains a directive barrier',
+    dir: '/declaration-siblings/04',
+    input: 'input.cjs',
+    output: 'output.cjs',
+  },
+  {
+    name: 'declarations: statement boundary: parenthesized expression',
+    dir: '/declaration-siblings/05',
+    input: 'input.cjs',
+    output: 'output.cjs',
+  },
+  {
+    name: 'declarations: statement boundary: array expression',
+    dir: '/declaration-siblings/06',
+    input: 'input.cjs',
+    output: 'output.cjs',
+  },
+  {
+    name: 'declarations: statement boundary: template expression',
+    dir: '/declaration-siblings/07',
+    input: 'input.cjs',
+    output: 'output.cjs',
+  },
+  {
+    name: 'declarations: statement boundary: regular expression',
+    dir: '/declaration-siblings/08',
+    input: 'input.cjs',
+    output: 'output.cjs',
+  },
+  {
+    name: 'declarations: statement boundary: unary expression after a used declaration',
+    dir: '/declaration-siblings/09',
+    input: 'input.cjs',
+    output: 'output.cjs',
+  },
+  {
+    name: 'declarations: statement boundary: strict directive remains an ordinary expression',
+    dir: '/declaration-siblings/10',
+    input: 'input.cjs',
+    output: 'output.cjs',
+  },
+  {
+    name: 'declarations: statement boundary: adjacent removed statements',
+    dir: '/declaration-siblings/11',
+    input: 'input.cjs',
+    output: 'output.cjs',
+  },
+  {
+    name: 'declarations: statement boundary: explicit separator control',
+    dir: '/declaration-siblings/12',
+    input: 'input.cjs',
+    output: 'output.cjs',
+  },
+  {
+    name: 'declarations: required body: false if',
+    dir: '/declaration-siblings/13',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: required body: true if',
+    dir: '/declaration-siblings/14',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: required body: then before else',
+    dir: '/declaration-siblings/15',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: required body: else',
+    dir: '/declaration-siblings/16',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: required body: nested if before else',
+    dir: '/declaration-siblings/17',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: required body: while',
+    dir: '/declaration-siblings/18',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: required body: do while',
+    dir: '/declaration-siblings/19',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: required body: label',
+    dir: '/declaration-siblings/20',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: required body: label under if',
+    dir: '/declaration-siblings/21',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: required body: whole destructuring',
+    dir: '/declaration-siblings/22',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: required body: finite for',
+    dir: '/declaration-siblings/23',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: required body: both branches with multiple diagnostics',
+    dir: '/declaration-siblings/24',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: required body: used sibling retains the declaration',
+    dir: '/declaration-siblings/25',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: same-name literal in first binding',
+    dir: '/declaration-siblings/26',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: same-name literal in middle binding',
+    dir: '/declaration-siblings/27',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: same-name literal in last binding',
+    dir: '/declaration-siblings/28',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: multiple same-name literal diagnostics',
+    dir: '/declaration-siblings/29',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: adjacent same-name literal diagnostics',
+    dir: '/declaration-siblings/30',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: BOM same-name literal in first binding',
+    dir: '/declaration-siblings/31',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: BOM same-name literal in middle binding',
+    dir: '/declaration-siblings/32',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: BOM same-name literal in last binding',
+    dir: '/declaration-siblings/33',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: BOM multiple same-name literal diagnostics',
+    dir: '/declaration-siblings/34',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: BOM adjacent same-name literal diagnostics',
+    dir: '/declaration-siblings/35',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: spaced same-name literal from the RV12 sibling probe',
+    dir: '/declaration-siblings/36',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: typed same-name literal sibling',
+    dir: '/declaration-siblings/37',
+    input: 'input.ts',
+    output: 'output.ts',
+  },
+  {
+    name: 'declarations: compact first const declarator',
+    dir: '/declaration-siblings/38',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: compact adjacent leading let declarators',
+    dir: '/declaration-siblings/39',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: compact first var declarator',
+    dir: '/declaration-siblings/40',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: compact unused object before an identifier',
+    dir: '/declaration-siblings/41',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: compact unused array before an identifier',
+    dir: '/declaration-siblings/42',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: compact surviving destructuring',
+    dir: '/declaration-siblings/43',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: first const declarator',
+    dir: '/declaration-siblings/44',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: middle let declarator',
+    dir: '/declaration-siblings/45',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: last var declarator',
+    dir: '/declaration-siblings/46',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: adjacent leading declarators',
+    dir: '/declaration-siblings/47',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: adjacent trailing declarators',
+    dir: '/declaration-siblings/48',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: adjacent middle declarators',
+    dir: '/declaration-siblings/49',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: disjoint removal ranges',
+    dir: '/declaration-siblings/50',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: commas inside comments around separators',
+    dir: '/declaration-siblings/51',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: trailing removal preserves a line comment on the kept declaration',
+    dir: '/declaration-siblings/52',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: trailing removal preserves a compact block comment on the kept declaration',
+    dir: '/declaration-siblings/53',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: multiple declaration statements',
+    dir: '/declaration-siblings/54',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: fully unused object before a surviving declarator',
+    dir: '/declaration-siblings/55',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: fully unused array between surviving declarators',
+    dir: '/declaration-siblings/56',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: fully unused object after a surviving declarator',
+    dir: '/declaration-siblings/57',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: adjacent unused destructuring declarators with rest',
+    dir: '/declaration-siblings/58',
+    input: 'input.js',
+    output: 'output.js',
+    skip: ['biome'],
+  },
+  {
+    name: 'declarations: mixed trailing unused declarators',
+    dir: '/declaration-siblings/59',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: surviving destructuring retains array elision and rest',
+    dir: '/declaration-siblings/60',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: whole simple declaration is unused',
+    dir: '/declaration-siblings/61',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: whole object declaration is unused',
+    dir: '/declaration-siblings/62',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: whole array declaration is unused',
+    dir: '/declaration-siblings/63',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: whole mixed declaration is unused',
+    dir: '/declaration-siblings/64',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: all used declarators stay unchanged',
+    dir: '/declaration-siblings/65',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: write-only reassignment stays unchanged',
+    dir: '/declaration-siblings/66',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: write-only sibling survives removal of another declarator',
+    dir: '/declaration-siblings/67',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: for-loop bindings stay unchanged',
+    dir: '/declaration-siblings/68',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: for-loop inside an arrow keeps its enclosing declaration',
+    dir: '/declaration-siblings/69',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: for-of inside an arrow keeps its enclosing declaration',
+    dir: '/declaration-siblings/70',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: initializer side-effect removal policy stays unchanged',
+    dir: '/declaration-siblings/71',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: typed sibling declarators',
+    dir: '/declaration-siblings/72',
+    input: 'input.ts',
+    output: 'output.ts',
+  },
+  {
+    name: 'declarations: consecutive functions before a directive-like string',
+    dir: '/declaration-siblings/73',
+    input: 'input.cjs',
+    output: 'output.cjs',
+  },
+  {
+    name: 'declarations: nested functions before a directive-like string',
+    dir: '/declaration-siblings/74',
+    input: 'input.cjs',
+    output: 'output.cjs',
+  },
+  {
+    name: 'declarations: with at end of script',
+    dir: '/declaration-siblings/75',
+    input: 'input.cjs',
+    output: 'output.cjs',
+  },
+  {
+    name: 'declarations: with before an outer-scope read',
+    dir: '/declaration-siblings/76',
+    input: 'input.cjs',
+    output: 'output.cjs',
+  },
+  {
+    name: 'declarations: function in if at end of script',
+    dir: '/declaration-siblings/77',
+    input: 'input.cjs',
+    output: 'output.cjs',
+  },
+  {
+    name: 'declarations: function in else at end of script',
+    dir: '/declaration-siblings/78',
+    input: 'input.cjs',
+    output: 'output.cjs',
+  },
+  {
+    name: 'declarations: function in label at end of script',
+    dir: '/declaration-siblings/79',
+    input: 'input.cjs',
+    output: 'output.cjs',
+  },
+  {
+    name: 'declarations: function at top level (control)',
+    dir: '/declaration-siblings/80',
+    input: 'input.cjs',
+    output: 'output.cjs',
+  },
+  {
+    name: 'declarations: object trailing comma',
+    dir: '/diagnostic-binding-location/object-trailing-comma',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: parameter trailing comma',
+    dir: '/diagnostic-binding-location/parameter-trailing-comma',
+    input: 'input.js',
+    output: 'output.js',
+  },
   {
     name: 'import clauses: preserves a used default and side-effect import',
     dir: '/import-clauses/case-0',
@@ -419,14 +1072,10 @@ for (const [linterName, runner] of Object.entries(lintRunners)) {
   for (const fixture of fixtureMatrix) {
     if (fixture.only && !fixture.only.includes(linterName)) continue;
     if (fixture.skip?.includes(linterName)) continue;
-    test(`${linterName} ${fixture.name}`, async () => {
+    test(`${linterName} ${fixture.name}`, () => {
       const inputFile = path.join(fixturesDir, `${fixture.dir}/${fixture.input}`);
       const expectOutputFile = path.join(fixturesDir, `${fixture.dir}/${fixture.output}`);
-      if (fixture.diagnostic) {
-        await transformFixture(fixture, linterName, output => {
-          assert.equal(output, fs.readFileSync(expectOutputFile, 'utf8'));
-        });
-      } else execLint(inputFile, expectOutputFile, runner);
+      execLint(inputFile, expectOutputFile, runner);
     });
   }
 }
