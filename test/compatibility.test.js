@@ -21,6 +21,42 @@ function runReport(t, source, createReport) {
   return readFileSync(filePath, 'utf8');
 }
 
+// The matrix's ESLint runners use args: 'after-used'; these reports also flag earlier unused parameters.
+const listSeparatorParameterCases = [
+  {
+    name: 'used later argument retains earlier unused argument',
+    source: 'function run(unused /* keep, comment */, kept,) { console.log(kept); } run(0, 42);',
+    columns: [14],
+    expected: 'function run(unused /* keep, comment */, kept,) { console.log(kept); } run(0, 42);',
+  },
+  {
+    name: 'used middle argument with both neighbors reported',
+    source: 'function run(unusedA, kept, unusedB /* keep, comment */,) { console.log(kept); } run(0, 42, 1);',
+    columns: [14, 29],
+    expected: 'function run(unusedA, kept, /* keep, comment */) { console.log(kept); } run(0, 42, 1);',
+  },
+  {
+    name: 'used rest parameter retains earlier unused argument',
+    source: 'function run(unused /* keep, comment */, ...kept) { console.log(kept[0]); } run(0, 42);',
+    columns: [14],
+    expected: 'function run(unused /* keep, comment */, ...kept) { console.log(kept[0]); } run(0, 42);',
+  },
+];
+
+for (const ruleId of ['no-unused-vars', '@typescript-eslint/no-unused-vars']) {
+  for (const fixture of listSeparatorParameterCases) {
+    test(`${ruleId} list separators: ${fixture.name}`, t => {
+      const actual = runReport(t, fixture.source, filePath => [
+        {
+          filePath,
+          messages: fixture.columns.map(column => ({ ruleId, line: 1, column })),
+        },
+      ]);
+      assert.equal(actual, fixture.expected);
+    });
+  }
+}
+
 const biomeCases = [
   {
     name: 'variables',
@@ -120,6 +156,31 @@ for (const fixture of biomeLegacyImportCases) {
   });
 }
 
+// The matrix uses args: 'after-used', so ESLint does not report a leading parameter before a used one.
+for (const ruleId of ['no-unused-vars', '@typescript-eslint/no-unused-vars']) {
+  test(`${ruleId}: preserves a reported leading arrow parameter`, t => {
+    const source = 'export const kept = (unused, used) => used + 40;\n';
+    const actual = runReport(t, source, filePath => [
+      {
+        filePath,
+        source,
+        messages: [
+          {
+            ruleId,
+            line: 1,
+            column: 22,
+            suggestions:
+              ruleId === 'no-unused-vars'
+                ? [{ data: { varName: 'unused' }, fix: { range: [21, 28], text: '' } }]
+                : undefined,
+          },
+        ],
+      },
+    ]);
+    assert.equal(actual, 'export const kept = (unused, used) => used + 40;\n');
+  });
+}
+
 for (const [name, separator, start] of [
   ['LF', '\n', { line: 2, column: 7 }],
   ['CRLF', '\r\n', { line: 2, column: 7 }],
@@ -141,6 +202,79 @@ for (const [name, separator, start] of [
   });
 }
 
+// The matrix lints one file at a time and cannot control cross-file diagnostic order.
+for (const order of ['before', 'after']) {
+  test(`Oxlint report: parser error ${order} unused diagnostics`, t => {
+    const source = `const unused = 1;
+const { first, /* punctuation, stays inside this declaration */ second } = { first: 1, second: 2 };
+export function kept(value) {
+  let pending = 0;
+  pending = value;
+  return value * 2;
+}
+console.log(kept(21));
+`;
+    let brokenPath;
+    const actual = runReport(t, source, filePath => {
+      brokenPath = path.join(path.dirname(filePath), 'broken.js');
+      writeFileSync(brokenPath, 'const broken = ;\n');
+      const parserError = {
+        message: 'Unexpected token',
+        severity: 'error',
+        filename: brokenPath,
+        labels: [{ span: { offset: 15, length: 1, line: 1, column: 16 } }],
+      };
+      const unused = [
+        [6, 6],
+        [26, 5],
+        [82, 6],
+        [154, 7],
+      ].map(([offset, length]) => ({
+        code: 'eslint(no-unused-vars)',
+        filename: filePath,
+        labels: [{ span: { offset, length } }],
+      }));
+      return { diagnostics: order === 'before' ? [parserError, ...unused] : [...unused, parserError] };
+    });
+    assert.equal(
+      actual,
+      `
+export function kept(value) {
+  let pending = 0;
+  pending = value;
+  return value * 2;
+}
+console.log(kept(21));
+`,
+    );
+    assert.equal(readFileSync(brokenPath, 'utf8'), 'const broken = ;\n');
+  });
+}
+
+// The matrix does not enable debugger rules.
+for (const [name, createReport] of [
+  ['ESLint', filePath => [{ filePath, messages: [{ ruleId: 'no-debugger', line: 1, column: 1 }] }]],
+  [
+    'Biome',
+    filePath => ({
+      diagnostics: [
+        { category: 'lint/suspicious/noDebugger', location: { path: filePath, start: { line: 1, column: 1 } } },
+      ],
+    }),
+  ],
+  [
+    'Oxlint',
+    filePath => ({
+      diagnostics: [{ code: 'eslint(no-debugger)', filename: filePath, labels: [{ span: { offset: 0, length: 9 } }] }],
+    }),
+  ],
+]) {
+  test(`${name} unrelated rule leaves source unchanged`, t => {
+    const actual = runReport(t, 'debugger;\nconsole.log(42);\n', createReport);
+    assert.equal(actual, 'debugger;\nconsole.log(42);\n');
+  });
+}
+
 for (const [name, report] of [
   ['ESLint', []],
   ['Biome', { summary: {}, diagnostics: [], command: 'lint' }],
@@ -151,3 +285,47 @@ for (const [name, report] of [
     assert.equal(actual, 'export const kept = 1;\n');
   });
 }
+
+// The matrix normalizes whitespace, so these cases check the directive and line endings exactly.
+const shebangCases = [
+  {
+    name: 'CRLF directive',
+    source: '#!/usr/bin/env node\r\nconst unused = 1;\r\nconsole.log(42);\r\n',
+    expected: '#!/usr/bin/env node\r\n\r\nconsole.log(42);\r\n',
+    column: 7,
+  },
+  {
+    name: 'last import without final newline',
+    source: '#!/usr/bin/env node\nimport unused from "./values.mjs";',
+    expected: '#!/usr/bin/env node\n',
+    column: 8,
+  },
+];
+
+for (const ruleId of ['no-unused-vars', '@typescript-eslint/no-unused-vars']) {
+  for (const fixture of shebangCases) {
+    test(`shebang ${ruleId}: ${fixture.name}`, t => {
+      const actual = runReport(t, fixture.source, filePath => [
+        {
+          filePath,
+          messages: [{ ruleId, line: 2, column: fixture.column }],
+        },
+      ]);
+      assert.equal(actual, fixture.expected);
+    });
+  }
+}
+
+test('shebang: preserves executable permissions', async t => {
+  const { chmodSync, statSync } = await import('node:fs');
+  let file;
+  let originalMode;
+  const actual = runReport(t, '#!/usr/bin/env node\nconst unused = 1;\nconsole.log(42);\n', filePath => {
+    file = filePath;
+    chmodSync(file, 0o755);
+    originalMode = statSync(file).mode;
+    return [{ filePath, messages: [{ ruleId: 'no-unused-vars', line: 2, column: 7 }] }];
+  });
+  assert.equal(actual, '#!/usr/bin/env node\n\nconsole.log(42);\n');
+  assert.equal(statSync(file).mode, originalMode);
+});

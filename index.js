@@ -54,7 +54,8 @@ removeUnusedVariables(unifiedResults);
 
 function detect(json) {
   if (json.diagnostics && Array.isArray(json.diagnostics)) {
-    return json.diagnostics[0]?.code?.startsWith('eslint') ? Format.OXLINT : Format.BIOME;
+    // Parser errors have no code, so inspect later diagnostics too.
+    return json.diagnostics.some(diagnostic => diagnostic.code?.startsWith('eslint')) ? Format.OXLINT : Format.BIOME;
   }
   return Format.ESLINT;
 }
@@ -163,13 +164,27 @@ function findParentDeclaration(node) {
 
 function isWriteTarget(id) {
   const parent = id.parent;
-  if (ts.isBinaryExpression(parent) && parent.left === id && ts.isAssignmentOperator(parent.operatorToken.kind)) {
-    return true;
-  }
   if ((ts.isPostfixUnaryExpression(parent) || ts.isPrefixUnaryExpression(parent)) && parent.operand === id) {
     return parent.operator === ts.SyntaxKind.PlusPlusToken || parent.operator === ts.SyntaxKind.MinusMinusToken;
   }
-  return false;
+  // Climb out of destructuring patterns, e.g. `[id] = …`, `({ key: id } = …)`, `for ([id] of …)`
+  let target = id;
+  while (
+    ts.isParenthesizedExpression(target.parent) ||
+    ts.isArrayLiteralExpression(target.parent) ||
+    ts.isObjectLiteralExpression(target.parent) ||
+    ts.isSpreadElement(target.parent) ||
+    ts.isSpreadAssignment(target.parent) ||
+    (ts.isShorthandPropertyAssignment(target.parent) && target.parent.name === target) ||
+    (ts.isPropertyAssignment(target.parent) && target.parent.initializer === target)
+  ) {
+    target = target.parent;
+  }
+  const container = target.parent;
+  if (ts.isBinaryExpression(container) && container.left === target) {
+    return ts.isAssignmentOperator(container.operatorToken.kind);
+  }
+  return (ts.isForOfStatement(container) || ts.isForInStatement(container)) && container.initializer === target;
 }
 
 function isDeclarationName(token, node) {
@@ -294,22 +309,16 @@ function removeUnusedVariables(results) {
             }
             if (ts.isObjectBindingPattern(bindingPattern)) return getListElementRemoval(bindingElement, sourceFile);
 
-            const start = bindingElement.getFullStart();
-            let end = bindingElement.getEnd();
-            if (!ts.isArrayBindingPattern(bindingPattern) && bindingElement !== bindingPattern.elements.at(-1)) {
-              const comma = ts.findNextToken(bindingElement, sourceFile);
-              if (comma?.kind !== ts.SyntaxKind.CommaToken) return null;
-              end = comma.getEnd();
-            }
-            return { start, end };
+            // Keep array slots as holes so later bindings and rest elements retain their positions.
+            return { start: bindingElement.getFullStart(), end: bindingElement.getEnd() };
           }
 
           if (ts.isParameter(token.parent)) {
             const parameter = token.parent;
             const parent = parameter.parent;
             if (ts.isArrowFunction(parent) && parent.parameters.length === 1) {
-              const hasParens =
-                source.slice(parent.parameters[0].getFullStart() - 1, parent.parameters[0].getFullStart()) === '(';
+              // Only the arrow's own tokens can delimit its parameter list, not an enclosing call or wrapper.
+              const hasParens = parent.getChildren(sourceFile).some(child => child.kind === ts.SyntaxKind.OpenParenToken);
               if (!hasParens) {
                 return { start: parameter.getFullStart(), end: parameter.getEnd(), replacement: ' ()' };
               }
