@@ -13,5 +13,11 @@ export function iterate(items) {
   [first] = items;
   let size;
   ({ length: size } = items);
+  let length;
+  ({ length } = items);
+  let rest;
+  [...rest] = items;
+  let other;
+  ({ ...other } = items);
   return items;
 }
