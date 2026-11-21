@@ -1428,6 +1428,36 @@ const fixtureMatrix = [
     output: 'output.cjs',
   },
   {
+    name: 'declarations: statement boundary: no separator without semicolons',
+    dir: '/declaration-siblings/81',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: statement boundary: no separator after a block',
+    dir: '/declaration-siblings/82',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: statement boundary: next statement on the same line',
+    dir: '/declaration-siblings/83',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: statement boundary: removed function before array expression',
+    dir: '/declaration-siblings/84',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: statement boundary: removed type alias before array expression',
+    dir: '/declaration-siblings/85',
+    input: 'input.ts',
+    output: 'output.ts',
+  },
+  {
     name: 'declarations: required body: false if',
     dir: '/declaration-siblings/13',
     input: 'input.js',
