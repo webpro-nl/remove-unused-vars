@@ -412,6 +412,7 @@ const fixtureMatrix = [
     skip: ['biome'],
   },
   { name: 'basic const', dir: '/const', input: 'input.js', output: 'output.js' },
+  { name: 'used ignored binding', dir: '/ignored-bindings', input: 'input.js', output: 'output.js' },
   { name: 'basic function', dir: '/function', input: 'input.js', output: 'output.js' },
   { name: 'basic import', dir: '/import', input: 'input.js', output: 'output.js', skip: ['biome'] },
   {
