@@ -162,6 +162,42 @@ function findParentDeclaration(node) {
   return node;
 }
 
+function getDeclarationRemoval(node, removedStatements, isRemoved, sourceFile) {
+  const parent = node.parent;
+  let needsSeparator =
+    ts.isIfStatement(parent) ||
+    ts.isIterationStatement(parent, false) ||
+    ts.isLabeledStatement(parent) ||
+    ts.isWithStatement(parent);
+  const statements = parent.statements;
+  const index = statements?.indexOf(node) ?? -1;
+  if (index >= 0) {
+    let first = index;
+    while (isRemoved(statements[first - 1])) first--;
+    let last = index;
+    while (isRemoved(statements[last + 1])) last++;
+    const previous = statements[first - 1];
+    const next = statements[last + 1];
+    // Adjacent removals share one separator, placed at the first declaration among them.
+    if (next && !statements.slice(first, index).some(statement => removedStatements.has(statement))) {
+      const text = sourceFile.text;
+      const nextStart = next.getStart(sourceFile);
+      const becomesDirective = ts.isExpressionStatement(next) && ts.isStringLiteral(next.expression);
+      const continuesPrevious =
+        previous &&
+        previous.getLastToken(sourceFile)?.kind !== ts.SyntaxKind.SemicolonToken &&
+        ('([`+-/'.includes(text[nextStart]) ||
+          !/[\r\n\u2028\u2029]/.test(text.slice(statements[last].getEnd(), nextStart)));
+      needsSeparator = becomesDirective || Boolean(continuesPrevious);
+    }
+  }
+  return {
+    start: node.getFullStart(),
+    end: node.getEnd(),
+    replacement: needsSeparator ? ';' : '',
+  };
+}
+
 function isWriteTarget(id) {
   const parent = id.parent;
   if ((ts.isPostfixUnaryExpression(parent) || ts.isPrefixUnaryExpression(parent)) && parent.operand === id) {
@@ -250,6 +286,7 @@ function removeUnusedVariables(results) {
 
     const processedImports = new Set();
     const removedDeclarations = new Set();
+    const removedStatements = new Set();
 
     const positions = file.positions
       .map(p => {
@@ -434,58 +471,32 @@ function removeUnusedVariables(results) {
         if (ts.isVariableStatement(node)) {
           if (token.parent.parent !== node.declarationList) return null;
           removedDeclarations.add(token.parent);
-          return null;
-        }
-
-        const statements = node.parent.statements;
-        const next = statements?.[statements.indexOf(node) + 1];
-        const needsBody =
-          (ts.isFunctionDeclaration(node) && (ts.isIfStatement(node.parent) || ts.isLabeledStatement(node.parent))) ||
-          (next && ts.isExpressionStatement(next) && ts.isStringLiteral(next.expression));
-        return { start: node.getFullStart(), end: node.getEnd(), replacement: needsBody ? ';' : '' };
+        } else removedStatements.add(node);
+        return null;
       })
       .filter(Boolean);
 
     const declarationLists = new Set([...removedDeclarations].map(declaration => declaration.parent));
-    const removedStatements = new Set(
-      [...declarationLists]
-        .filter(list => list.declarations.every(declaration => removedDeclarations.has(declaration)))
-        .map(list => list.parent),
-    );
+    for (const declarationList of declarationLists) {
+      if (declarationList.declarations.every(declaration => removedDeclarations.has(declaration))) {
+        removedStatements.add(declarationList.parent);
+      }
+    }
     const removalsByEnd = new Map(positions.map(position => [position.end, position]));
-    const isRemovedStatement = statement => {
+    const isRemoved = statement => {
+      if (!statement) return false;
       const removal = removalsByEnd.get(statement.getEnd());
       return (
         removedStatements.has(statement) ||
-        (removal && removal.start <= statement.getStart(sourceFile) && !removal.replacement)
+        Boolean(removal && removal.start <= statement.getStart(sourceFile) && !removal.replacement)
       );
     };
+    for (const statement of removedStatements) {
+      positions.push(getDeclarationRemoval(statement, removedStatements, isRemoved, sourceFile));
+    }
     for (const declarationList of declarationLists) {
+      if (removedStatements.has(declarationList.parent)) continue;
       const declarations = declarationList.declarations;
-      if (removedStatements.has(declarationList.parent)) {
-        const statement = declarationList.parent;
-        const parent = statement.parent;
-        const statementIndex = parent.statements?.indexOf(statement) ?? -1;
-        let previousIndex = statementIndex - 1;
-        let previous = statementIndex > 0 ? parent.statements[previousIndex] : undefined;
-        while (previous && isRemovedStatement(previous)) previous = parent.statements[--previousIndex];
-        let nextIndex = statementIndex + 1;
-        let next = statementIndex >= 0 ? parent.statements[nextIndex] : undefined;
-        while (next && isRemovedStatement(next)) next = parent.statements[++nextIndex];
-        const needsBody =
-          ts.isIfStatement(parent) ||
-          ts.isIterationStatement(parent, false) ||
-          ts.isLabeledStatement(parent) ||
-          ts.isWithStatement(parent) ||
-          (previous && previous.getLastToken(sourceFile)?.kind !== ts.SyntaxKind.SemicolonToken) ||
-          (next && ts.isExpressionStatement(next) && ts.isStringLiteral(next.expression));
-        positions.push({
-          start: statement.getFullStart(),
-          end: statement.getEnd(),
-          replacement: needsBody ? ';' : '',
-        });
-        continue;
-      }
 
       for (let first = 0; first < declarations.length; first++) {
         if (!removedDeclarations.has(declarations[first])) continue;
