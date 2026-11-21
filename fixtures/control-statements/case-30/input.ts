@@ -1,3 +1,2 @@
-const answer: number = 42;
-if (false) var unused = 1;
-console.log(answer);
+if (false) var unused: number = 1;
+console.log(42);

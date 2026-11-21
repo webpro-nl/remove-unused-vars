@@ -175,8 +175,10 @@ function findParentDeclaration(node) {
 function getDeclarationRemoval(node) {
   const parent = node.parent;
   const needsBody =
-    ts.isVariableStatement(node) &&
-    (ts.isIfStatement(parent) || ts.isIterationStatement(parent, false) || ts.isLabeledStatement(parent));
+    ts.isIfStatement(parent) ||
+    ts.isIterationStatement(parent, false) ||
+    ts.isLabeledStatement(parent) ||
+    ts.isWithStatement(parent);
   return {
     start: node.getFullStart(),
     end: node.getEnd(),
