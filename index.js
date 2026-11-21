@@ -180,6 +180,7 @@ function isWriteTarget(id) {
   // Climb out of destructuring patterns, e.g. `[id] = …`, `({ key: id } = …)`, `for ([id] of …)`
   let target = id;
   while (
+    ts.isParenthesizedExpression(target.parent) ||
     ts.isArrayLiteralExpression(target.parent) ||
     ts.isObjectLiteralExpression(target.parent) ||
     ts.isSpreadElement(target.parent) ||

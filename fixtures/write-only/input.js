@@ -19,5 +19,9 @@ export function iterate(items) {
   [...rest] = items;
   let other;
   ({ ...other } = items);
+  let nested;
+  [(nested)] = items;
+  let wrapped;
+  (wrapped) = items;
   return items;
 }
