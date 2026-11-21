@@ -75,7 +75,6 @@ for (const format of ['legacy', 'current']) {
   }
 }
 
-// The matrix does not enable reportUsedIgnorePattern, which reports used bindings as usedIgnoredVar.
 for (const typed of [false, true]) {
   const ruleId = typed ? '@typescript-eslint/no-unused-vars' : 'no-unused-vars';
   const annotation = typed ? ': number' : '';
