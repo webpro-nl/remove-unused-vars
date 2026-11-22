@@ -164,6 +164,13 @@ function findParentDeclaration(node) {
   return node;
 }
 
+function continuesStatement(previous, removedEnd, next, sourceFile) {
+  if (!previous || !next || previous.getLastToken(sourceFile)?.kind === ts.SyntaxKind.SemicolonToken) return false;
+  const text = sourceFile.text;
+  const nextStart = next.getStart(sourceFile);
+  return '([`+-/'.includes(text[nextStart]) || !/[\r\n\u2028\u2029]/.test(text.slice(removedEnd, nextStart));
+}
+
 function getDeclarationRemoval(node, removedStatements, isRemoved, sourceFile) {
   const parent = node.parent;
   let needsSeparator =
@@ -182,15 +189,8 @@ function getDeclarationRemoval(node, removedStatements, isRemoved, sourceFile) {
     const next = statements[last + 1];
     // Adjacent removals share one separator, placed at the first declaration among them.
     if (next && !statements.slice(first, index).some(statement => removedStatements.has(statement))) {
-      const text = sourceFile.text;
-      const nextStart = next.getStart(sourceFile);
       const becomesDirective = ts.isExpressionStatement(next) && ts.isStringLiteral(next.expression);
-      const continuesPrevious =
-        previous &&
-        previous.getLastToken(sourceFile)?.kind !== ts.SyntaxKind.SemicolonToken &&
-        ('([`+-/'.includes(text[nextStart]) ||
-          !/[\r\n\u2028\u2029]/.test(text.slice(statements[last].getEnd(), nextStart)));
-      needsSeparator = becomesDirective || Boolean(continuesPrevious);
+      needsSeparator = becomesDirective || continuesStatement(previous, statements[last].getEnd(), next, sourceFile);
     }
   }
   return {
@@ -535,10 +535,14 @@ function removeUnusedVariables(results) {
         const isLast = last === declarations.length - 1;
         const precedingComma = isLast ? ts.findNextToken(declarations[first - 1], sourceFile) : undefined;
         if (isLast && precedingComma?.kind !== ts.SyntaxKind.CommaToken) continue;
+        const statement = declarationList.parent;
+        const siblings = isLast ? statement.parent.statements : undefined;
+        const next = siblings?.[siblings.indexOf(statement) + 1];
+        const needsSeparator = continuesStatement(statement, statement.getEnd(), next, sourceFile);
         positions.push({
           start: isLast ? precedingComma.getStart(sourceFile) : declarations[first].getFullStart(),
           end: isLast ? declarations[last].getEnd() : declarations[last + 1].getFullStart(),
-          replacement: first === 0 ? ' ' : '',
+          replacement: first === 0 ? ' ' : needsSeparator ? ';' : '',
         });
         first = last;
       }

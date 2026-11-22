@@ -1503,6 +1503,24 @@ const fixtureMatrix = [
     output: 'output.ts',
   },
   {
+    name: 'declarations: statement boundary: removed trailing declarator before call expression',
+    dir: '/declaration-siblings/86',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: statement boundary: removed trailing declarator before array expression',
+    dir: '/declaration-siblings/87',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: statement boundary: no separator after a trailing declarator',
+    dir: '/declaration-siblings/88',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
     name: 'declarations: required body: false if',
     dir: '/declaration-siblings/13',
     input: 'input.js',
