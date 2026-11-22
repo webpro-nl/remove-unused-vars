@@ -1521,6 +1521,24 @@ const fixtureMatrix = [
     output: 'output.js',
   },
   {
+    name: 'declarations: trailing declarator in an unbraced if before an array expression',
+    dir: '/declaration-siblings/89',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: trailing declarator after a block-bodied arrow before a call',
+    dir: '/declaration-siblings/90',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
+    name: 'declarations: trailing declarator after a function expression before a call',
+    dir: '/declaration-siblings/91',
+    input: 'input.js',
+    output: 'output.js',
+  },
+  {
     name: 'declarations: required body: false if',
     dir: '/declaration-siblings/13',
     input: 'input.js',
