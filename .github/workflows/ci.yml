@@ -20,5 +20,4 @@ jobs:
           runtime: node@26
           cache: true
           require-lockfile: true
-      # The tests share writable fixtures, so run test files serially.
-      - run: node --test --test-concurrency=1 ./test/*.test.js
+      - run: pnpm test

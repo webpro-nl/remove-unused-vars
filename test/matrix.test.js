@@ -1,10 +1,17 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { execSync } from 'node:child_process';
-import { test } from 'node:test';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { applyReport } from '../rewrite.js';
+import './stream-results.js';
 
-const fixturesDir = path.join(path.resolve(), 'fixtures');
+const fixturesDir = path.resolve('fixtures');
+const cli = path.resolve('index.js');
+
+const biomeReporterNotice = 'The `json` and `json-pretty` reporters are experimental and may change in patch releases.';
 
 const normalizeWhitespace = text => {
   return text
@@ -17,45 +24,64 @@ const expectEqual = (a, b) => {
   assert.equal(normalizeWhitespace(a), normalizeWhitespace(b));
 };
 
-const execLint = (inputFile, expectOutputFile, execCmd) => {
-  const original = fs.readFileSync(inputFile, 'utf-8');
-  try {
-    const cmd = execCmd(process.platform === 'win32' ? '"%FIXTURE_INPUT%"' : '"$FIXTURE_INPUT"');
-    execSync(cmd, { env: { ...process.env, FIXTURE_INPUT: inputFile }, stdio: 'inherit' });
+const require = createRequire(import.meta.url);
+function bin(pkg, name = pkg) {
+  const manifest = require.resolve(`${pkg}/package.json`);
+  return path.resolve(path.dirname(manifest), require(manifest).bin[name]);
+}
 
-    const processed = fs.readFileSync(inputFile, 'utf-8');
-    const expected = fs.readFileSync(expectOutputFile, 'utf-8');
+const eslint = [bin('eslint'), '-c', path.join(fixturesDir, 'eslint.config.js'), '--quiet', '-f', 'json'];
+const lintCommands = {
+  eslint: [...eslint, '--rule', 'no-unused-vars: error'],
+  'ts-eslint': [...eslint, '--rule', 'no-unused-vars: off', '--rule', '@typescript-eslint/no-unused-vars: error'],
+  biome: [
+    bin('@biomejs/biome', 'biome'),
+    'lint',
+    '--reporter=json',
+    '--max-diagnostics=none',
+    '--only=correctness/noUnusedVariables',
+    '--only=correctness/noUnusedImports',
+    '--only=correctness/noUnusedFunctionParameters',
+  ],
+  oxlint: [bin('oxlint'), '-A', 'all', '-D', 'no-unused-vars', '-f', 'json'],
+};
 
-    expectEqual(processed, expected);
-  } catch (error) {
-    throw error;
-  } finally {
-    fs.writeFileSync(inputFile, original);
+async function rewriteFixtures(linter, fixtures, useCli = false) {
+  const directory = path.join(workspace, linter);
+  await fs.promises.mkdir(directory, { recursive: true });
+  const inputs = fixtures.map(fixture => {
+    const input = path.join(fixture.dir, fixture.input);
+    fs.mkdirSync(path.join(directory, fixture.dir), { recursive: true });
+    fs.copyFileSync(path.join(fixturesDir, input), path.join(directory, input));
+    return input;
+  });
+  const { stdout, stderr, status, error, signal } = spawnSync(process.execPath, [...lintCommands[linter], ...inputs], {
+    cwd: directory,
+    encoding: 'utf8',
+    maxBuffer: 32 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', linter === 'biome' ? 'pipe' : 'inherit'],
+  });
+  if (stderr) {
+    for (const line of stderr.split(/(?<=\n)/)) {
+      if (line.trimEnd() !== biomeReporterNotice) process.stderr.write(line);
+    }
   }
-};
+  if (error) throw error;
+  assert.ok(status === 0 || status === 1, `${linter} failed (${signal ?? status})`);
+  if (useCli) {
+    execFileSync(process.execPath, [cli], { cwd: directory, input: stdout, stdio: ['pipe', 'inherit', 'inherit'] });
+    return;
+  }
 
-function runEsLint(inputFile) {
-  return `./node_modules/.bin/eslint -c fixtures/eslint.config.js --rule 'no-unused-vars: error' --quiet -f json ${inputFile} | ./index.js`;
+  // Biome and Oxlint report paths relative to the linter's working directory.
+  const previous = process.cwd();
+  try {
+    process.chdir(directory);
+    applyReport(JSON.parse(stdout));
+  } finally {
+    process.chdir(previous);
+  }
 }
-
-function runTsEslint(inputFile) {
-  return `./node_modules/.bin/eslint -c fixtures/eslint.config.js --rule 'no-unused-vars: off' --rule '@typescript-eslint/no-unused-vars: error' --quiet -f json ${inputFile} | ./index.js`;
-}
-
-function runBiome(inputFile) {
-  return `./node_modules/.bin/biome lint --only correctness/noUnusedVariables --only correctness/noUnusedImports --only correctness/noUnusedFunctionParameters --reporter json ${inputFile} | ./index.js`;
-}
-
-function runOxlint(inputFile) {
-  return `./node_modules/.bin/oxlint -A all -D 'no-unused-vars' -f json ${inputFile} | ./index.js`;
-}
-
-const lintRunners = {
-  eslint: runEsLint,
-  'ts-eslint': runTsEslint,
-  biome: runBiome,
-  oxlint: runOxlint,
-};
 
 const fixtureOptions = {
   'basics/enum': { skip: ['eslint'] },
@@ -75,6 +101,7 @@ const fixtureOptions = {
   'import-clauses/partial-range-with-jsdoc-reference': { only: ['biome'] },
   // Biome also reports the invalid declaration as unused and removes it.
   'oxlint-parser-errors/invalid-file': { skip: ['biome'] },
+  'statement-boundaries/unbraced-if-before-array': { cli: true },
 };
 
 function directories(parent) {
@@ -107,14 +134,20 @@ for (const dir of Object.keys(fixtureOptions)) {
   assert.ok(fixtureMatrix.some(fixture => fixture.dir === dir), `Missing fixture for linter options: ${dir}`);
 }
 
-for (const [linterName, runner] of Object.entries(lintRunners)) {
-  for (const fixture of fixtureMatrix) {
-    if (fixture.only && !fixture.only.includes(linterName)) continue;
-    if (fixture.skip?.includes(linterName)) continue;
-    test(`${linterName} ${fixture.name}`, () => {
-      const inputFile = path.join(fixturesDir, fixture.dir, fixture.input);
-      const expectOutputFile = path.join(fixturesDir, fixture.dir, fixture.outputs?.[linterName] ?? fixture.output);
-      execLint(inputFile, expectOutputFile, runner);
+const workspace = fs.mkdtempSync(path.join(tmpdir(), 'remove-unused-vars-matrix-'));
+after(() => fs.rmSync(workspace, { recursive: true, force: true }));
+
+for (const linter of Object.keys(lintCommands)) {
+  const fixtures = fixtureMatrix.filter(f => (!f.only || f.only.includes(linter)) && !f.skip?.includes(linter));
+  const batch = fixtures.filter(f => !f.cli);
+  let batchRun;
+  for (const fixture of fixtures) {
+    test(`${linter} ${fixture.name}`, async () => {
+      if (fixture.cli) await rewriteFixtures(linter, [fixture], true);
+      else await (batchRun ??= rewriteFixtures(linter, batch));
+      const actual = path.join(workspace, linter, fixture.dir, fixture.input);
+      const expected = path.join(fixturesDir, fixture.dir, fixture.outputs?.[linter] ?? fixture.output);
+      expectEqual(fs.readFileSync(actual, 'utf8'), fs.readFileSync(expected, 'utf8'));
     });
   }
 }

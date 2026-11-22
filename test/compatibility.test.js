@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { applyReport } from '../rewrite.js';
+import './stream-results.js';
 
 function runReport(t, source, createReport, fileName = 'input.js') {
   const directory = mkdtempSync(path.join(tmpdir(), 'remove-unused-vars-'));
