@@ -9,8 +9,9 @@ import assert from 'node:assert/strict';
 // and message shapes the current rules never produce. Both are fed to the CLI as a JSON file.
 
 const root = path.resolve();
-const inputFile = path.join(root, 'fixtures/multibyte/input.js');
-const outputFile = path.join(root, 'fixtures/multibyte/output.js');
+const fixtureDir = path.join(root, 'fixtures/diagnostic-binding-location/multibyte-before-binding');
+const inputFile = path.join(fixtureDir, 'input.js');
+const outputFile = path.join(fixtureDir, 'output.js');
 
 const runWithPayload = payload => {
   const original = fs.readFileSync(inputFile, 'utf-8');
