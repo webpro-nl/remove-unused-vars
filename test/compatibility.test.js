@@ -1,23 +1,16 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { fileURLToPath } from 'node:url';
-
-const cli = fileURLToPath(new URL('../index.js', import.meta.url));
+import { applyReport } from '../rewrite.js';
 
 function runReport(t, source, createReport, fileName = 'input.js') {
   const directory = mkdtempSync(path.join(tmpdir(), 'remove-unused-vars-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const filePath = path.join(directory, fileName);
   writeFileSync(filePath, source);
-  const result = spawnSync(process.execPath, [cli], {
-    input: JSON.stringify(createReport(filePath)),
-    encoding: 'utf8',
-  });
-  assert.equal(result.status, 0, result.stderr);
+  applyReport(createReport(filePath));
   return readFileSync(filePath, 'utf8');
 }
 

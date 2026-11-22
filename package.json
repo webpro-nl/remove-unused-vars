@@ -12,7 +12,8 @@
     "url": "https://webpro.nl"
   },
   "files": [
-    "index.js"
+    "index.js",
+    "rewrite.js"
   ],
   "repository": "github:webpro-nl/remove-unused-vars",
   "dependencies": {
