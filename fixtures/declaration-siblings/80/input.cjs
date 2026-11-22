@@ -1,0 +1,1 @@
+console.log(42); function msg(){return "msg";}

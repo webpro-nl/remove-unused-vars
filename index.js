@@ -136,25 +136,14 @@ function transformEslint(input) {
     .filter(result => result.messages.some(predicate))
     .map(result => {
       const source = result.source ?? readFileSync(result.filePath, 'utf-8');
+      const bomOffset = source.charCodeAt(0) === 0xfeff ? 1 : 0;
       return {
         filePath: result.filePath,
-        positions: result.messages.filter(predicate).map(msg => {
-          if (msg.ruleId === 'no-unused-vars') {
-            // catch clause no suggestions
-            if (!msg.suggestions) return [msg.line - 1, msg.column - 1];
-            const range = msg.suggestions[0]?.fix?.range;
-            const varName = msg.suggestions[0]?.data?.varName;
-            if (range && varName) {
-              const offset = source.slice(range[0], range[1]).lastIndexOf(varName);
-              return range[0] + offset;
-            }
-            if (range) return range[0] + (range[1] - range[0] > 1 ? 1 : 0); // i can't
-          }
-          // It's probably more precise to use the range from the suggestion, but the rule does not provide it yet
-          // When https://github.com/typescript-eslint/typescript-eslint/issues/10497 is fixed,
-          // then we can use the range from the suggestion.
-          return [msg.line - 1, msg.column - 1];
-        }),
+        // Suggestions can cover whole declarations, including other occurrences of the name.
+        // Use the reported identifier; write-only reports still pass through the reassignment guards.
+        positions: result.messages
+          .filter(predicate)
+          .map(msg => [msg.line - 1, msg.column - 1 + (msg.line === 1 ? bomOffset : 0)]),
         source,
       };
     });
@@ -175,17 +164,39 @@ function findParentDeclaration(node) {
   return node;
 }
 
-function getDeclarationRemoval(node) {
+function getDeclarationRemoval(node, removedStatements, isRemoved, sourceFile) {
   const parent = node.parent;
-  const needsBody =
+  let needsSeparator =
     ts.isIfStatement(parent) ||
     ts.isIterationStatement(parent, false) ||
     ts.isLabeledStatement(parent) ||
     ts.isWithStatement(parent);
+  const statements = parent.statements;
+  const index = statements?.indexOf(node) ?? -1;
+  if (index >= 0) {
+    let first = index;
+    while (isRemoved(statements[first - 1])) first--;
+    let last = index;
+    while (isRemoved(statements[last + 1])) last++;
+    const previous = statements[first - 1];
+    const next = statements[last + 1];
+    // Adjacent removals share one separator, placed at the first declaration among them.
+    if (next && !statements.slice(first, index).some(statement => removedStatements.has(statement))) {
+      const text = sourceFile.text;
+      const nextStart = next.getStart(sourceFile);
+      const becomesDirective = ts.isExpressionStatement(next) && ts.isStringLiteral(next.expression);
+      const continuesPrevious =
+        previous &&
+        previous.getLastToken(sourceFile)?.kind !== ts.SyntaxKind.SemicolonToken &&
+        ('([`+-/'.includes(text[nextStart]) ||
+          !/[\r\n\u2028\u2029]/.test(text.slice(statements[last].getEnd(), nextStart)));
+      needsSeparator = becomesDirective || Boolean(continuesPrevious);
+    }
+  }
   return {
     start: node.getFullStart(),
     end: node.getEnd(),
-    replacement: needsBody ? ';' : '',
+    replacement: needsSeparator ? ';' : '',
   };
 }
 
@@ -287,7 +298,8 @@ function removeUnusedVariables(results) {
     let usesJsx;
 
     const processedImports = new Set();
-    const processedBindings = new Set();
+    const removedDeclarations = new Set();
+    const removedStatements = new Set();
 
     const positions = file.positions
       .map(p => {
@@ -328,14 +340,23 @@ function removeUnusedVariables(results) {
                   const variableDeclarationList = variableDeclaration.parent;
                   const variableStatement = variableDeclarationList.parent;
                   if (ts.isVariableStatement(variableStatement)) {
-                    if (processedBindings.has(variableStatement.pos)) return null;
-                    processedBindings.add(variableStatement.pos);
-                    return getDeclarationRemoval(variableStatement);
+                    removedDeclarations.add(variableDeclaration);
+                    return null;
                   }
                 }
               }
             }
 
+            const restElement = ts.isObjectBindingPattern(bindingPattern)
+              ? bindingPattern.elements.find(element => element.dotDotDotToken)
+              : undefined;
+            if (
+              restElement &&
+              restElement !== bindingElement &&
+              !file.positions.some(p => ts.getTokenAtPosition(sourceFile, getPos(sourceFile, p)).parent === restElement)
+            ) {
+              return null;
+            }
             if (ts.isObjectBindingPattern(bindingPattern)) return getListElementRemoval(bindingElement, sourceFile);
 
             // Keep array slots as holes so later bindings and rest elements retain their positions.
@@ -474,9 +495,54 @@ function removeUnusedVariables(results) {
           return null;
         }
 
-        return getDeclarationRemoval(node);
+        if (ts.isVariableStatement(node)) {
+          if (token.parent.parent !== node.declarationList) return null;
+          removedDeclarations.add(token.parent);
+        } else removedStatements.add(node);
+        return null;
       })
       .filter(Boolean);
+
+    const declarationLists = new Set([...removedDeclarations].map(declaration => declaration.parent));
+    for (const declarationList of declarationLists) {
+      if (declarationList.declarations.every(declaration => removedDeclarations.has(declaration))) {
+        removedStatements.add(declarationList.parent);
+      }
+    }
+    const removalsByEnd = new Map(positions.map(position => [position.end, position]));
+    const isRemoved = statement => {
+      if (!statement) return false;
+      const removal = removalsByEnd.get(statement.getEnd());
+      return (
+        removedStatements.has(statement) ||
+        Boolean(removal && removal.start <= statement.getStart(sourceFile) && !removal.replacement)
+      );
+    };
+    for (const statement of removedStatements) {
+      positions.push(getDeclarationRemoval(statement, removedStatements, isRemoved, sourceFile));
+    }
+    for (const declarationList of declarationLists) {
+      if (removedStatements.has(declarationList.parent)) continue;
+      const declarations = declarationList.declarations;
+
+      for (let first = 0; first < declarations.length; first++) {
+        if (!removedDeclarations.has(declarations[first])) continue;
+        let last = first;
+        while (last + 1 < declarations.length && removedDeclarations.has(declarations[last + 1])) last++;
+
+        // Remove adjacent declarators together so their comma ranges never overlap.
+        // AST boundaries also keep commas inside comments out of separator handling.
+        const isLast = last === declarations.length - 1;
+        const precedingComma = isLast ? ts.findNextToken(declarations[first - 1], sourceFile) : undefined;
+        if (isLast && precedingComma?.kind !== ts.SyntaxKind.CommaToken) continue;
+        positions.push({
+          start: isLast ? precedingComma.getStart(sourceFile) : declarations[first].getFullStart(),
+          end: isLast ? declarations[last].getEnd() : declarations[last + 1].getFullStart(),
+          replacement: first === 0 ? ' ' : '',
+        });
+        first = last;
+      }
+    }
 
     if (positions.length > 0) {
       let output = source;
